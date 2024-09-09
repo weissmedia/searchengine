@@ -1,0 +1,16 @@
+---
+networks:
+  default:
+    name: ${DOCKER_NETWORK}
+    external: false
+
+services:
+  antlr:
+    build:
+      context: .
+      dockerfile: ./docker/antlr/Dockerfile
+      x-bake:
+        tags:
+          - ${DOCKER_REPOSITORY}-antlr:latest
+          #- ${DOCKER_REPOSITORY}:${BUMPVERSION}
+    image: ${DOCKER_REPOSITORY}-antlr
