@@ -3,19 +3,19 @@ package query
 import (
 	"github.com/weissmedia/searchengine/generated/sqparser"
 	"github.com/weissmedia/searchengine/internal/backend"
-	"github.com/weissmedia/searchengine/internal/config"
+	"github.com/weissmedia/searchengine/pkg/config"
 	"log"
 )
 
 type SearchEngine struct {
-	backend backend.SearchBackend
+	Backend backend.SearchBackend
 	parser  *sqparser.SearchQueryParser // ANTLR Parser
 }
 
 func NewSearchEngine(cfg config.Config) *SearchEngine {
 	searchBackend := backend.NewRedisBackend(cfg.RedisAddress)
 	return &SearchEngine{
-		backend: searchBackend,
+		Backend: searchBackend,
 	}
 }
 
@@ -30,7 +30,7 @@ func (se *SearchEngine) Search(query string) ([]string, error) {
 		log.Fatal(err)
 	}
 
-	exe := NewExecutor(se.backend)
+	exe := NewExecutor(se.Backend)
 	result, err := exe.Execute(tree)
 	if err != nil {
 		return nil, err
