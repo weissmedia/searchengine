@@ -3,7 +3,7 @@ package query
 import (
 	"github.com/weissmedia/searchengine/generated/sqparser"
 	"github.com/weissmedia/searchengine/internal/backend"
-	"github.com/weissmedia/searchengine/searchengine/config"
+	"github.com/weissmedia/searchengine/pkg/config"
 	"log"
 )
 
