@@ -8,9 +8,8 @@ import (
 )
 
 type SearchEngine struct {
-	backend   backend.SearchBackend
-	parser    *sqparser.SearchQueryParser // ANTLR Parser
-	ResultSet []string                    // Speichert das ResultSet
+	backend backend.SearchBackend
+	parser  *sqparser.SearchQueryParser // ANTLR Parser
 }
 
 func NewSearchEngine(cfg config.Config) *SearchEngine {
@@ -38,9 +37,4 @@ func (se *SearchEngine) Search(query string) ([]string, error) {
 	}
 	log.Print("Final Result Visitor: ", result)
 	return result, nil
-}
-
-// RecreateSchema erstellt das Suchschema im Backend neu
-func (se *SearchEngine) RecreateSchema() error {
-	return se.backend.RecreateSchema()
 }

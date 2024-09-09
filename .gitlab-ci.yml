@@ -1,0 +1,7 @@
+variables:
+  DOCKER_TARGETPLATFORM: linux/amd64
+
+before_script:
+  - env
+  - mkdir -p $HOME/.docker
+  - echo $DOCKER_AUTH_CONFIG > $HOME/.docker/config.json
