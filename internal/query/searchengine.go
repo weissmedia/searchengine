@@ -3,7 +3,6 @@ package query
 import (
 	"github.com/weissmedia/searchengine/generated/sqparser"
 	"github.com/weissmedia/searchengine/internal/backend"
-	"github.com/weissmedia/searchengine/pkg/config"
 	"log"
 )
 
@@ -12,8 +11,8 @@ type SearchEngine struct {
 	parser  *sqparser.SearchQueryParser // ANTLR Parser
 }
 
-func NewSearchEngine(cfg config.Config) *SearchEngine {
-	searchBackend := backend.NewRedisBackend(cfg.RedisAddress)
+func NewSearchEngine(cfg backend.Config) *SearchEngine {
+	searchBackend := backend.NewRedisBackend(cfg)
 	return &SearchEngine{
 		Backend: searchBackend,
 	}
