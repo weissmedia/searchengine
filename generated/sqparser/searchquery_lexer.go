@@ -1,4 +1,4 @@
-// Code generated from /app/antlr/SearchQuery.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from SearchQuery.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
 package sqparser
 

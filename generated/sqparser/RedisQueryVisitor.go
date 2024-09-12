@@ -1,53 +1,37 @@
-package query
+package sqparser
 
 import (
 	"fmt"
 	"github.com/antlr4-go/antlr/v4"
-	"github.com/weissmedia/searchengine/generated/sqparser"
-	"github.com/weissmedia/searchengine/internal/backend"
 	"log"
 	"sort"
 	"strconv"
 	"strings"
 )
 
-type SearchQueryExecutor struct {
-	*sqparser.BaseSearchQueryVisitor
-	backend   backend.SearchBackend
+type RedisQueryVisitor struct {
+	*BaseSearchQueryVisitor
+	RedisData map[string][]string
 	ResultSet []string
 }
 
-func NewExecutor(searchBackend backend.SearchBackend) *SearchQueryExecutor {
-	return &SearchQueryExecutor{
-		BaseSearchQueryVisitor: &sqparser.BaseSearchQueryVisitor{},
-		backend:                searchBackend,
-	}
-}
-
-// Execute führt die Verarbeitung durch
-func (r *SearchQueryExecutor) Execute(tree antlr.ParseTree) ([]string, error) {
-	// Besuche den geparsten Syntaxbaum (ParseTree)
-	result := r.Visit(tree).([]string) // Die resultierende Menge
-	return result, nil
-}
-
-func (r *SearchQueryExecutor) Visit(tree antlr.ParseTree) any {
+func (v *RedisQueryVisitor) Visit(tree antlr.ParseTree) any {
 	if tree == nil {
 		log.Println("Attempted to visit nil node")
 		return nil
 	}
 	log.Printf("Visiting node: %T\n", tree)
-	return tree.Accept(r)
+	return tree.Accept(v)
 }
-func (r *SearchQueryExecutor) VisitErrorNode(_ antlr.ErrorNode) interface{} {
+func (v *RedisQueryVisitor) VisitErrorNode(_ antlr.ErrorNode) interface{} {
 	log.Println("Visiting VisitErrorNode")
 	return nil
 }
-func (r *SearchQueryExecutor) VisitTerminal(_ antlr.TerminalNode) interface{} {
+func (v *RedisQueryVisitor) VisitTerminal(_ antlr.TerminalNode) interface{} {
 	log.Println("Visiting VisitTerminal")
 	return nil
 }
-func (r *SearchQueryExecutor) VisitChildren(tree antlr.RuleNode) any {
+func (v *RedisQueryVisitor) VisitChildren(tree antlr.RuleNode) any {
 	if tree == nil {
 		log.Println("Error: tree is nil")
 		return nil
@@ -63,59 +47,52 @@ func (r *SearchQueryExecutor) VisitChildren(tree antlr.RuleNode) any {
 			log.Printf("Error: child %d is not a ParseTree\n", i)
 			continue
 		}
-		_ = r.Visit(val)
+		_ = v.Visit(val)
 	}
 	return 0
 }
 
-func (r *SearchQueryExecutor) _VisitQuery(ctx *sqparser.QueryContext) any {
-	log.Println("Visiting Query")
-	result := r.Visit(ctx.Expression())
-	log.Printf("Result after visiting Query: %v\n", result)
-	return result
-}
-
-func (r *SearchQueryExecutor) VisitExpression(ctx *sqparser.ExpressionContext) any {
+func (v *RedisQueryVisitor) VisitExpression(ctx *ExpressionContext) any {
 	log.Println("Visiting Expression")
-	return r.Visit(ctx.OrExpression())
+	return v.Visit(ctx.OrExpression())
 }
 
-func (r *SearchQueryExecutor) VisitQuery(ctx *sqparser.QueryContext) any {
+func (v *RedisQueryVisitor) VisitQuery(ctx *QueryContext) any {
 	log.Println("Visiting Query")
 
 	// Besuche den Ausdruck und hole die Resultate
-	r.ResultSet = r.Visit(ctx.Expression()).([]string)
-	log.Printf("Initial result from expression: %v", r.ResultSet)
+	v.ResultSet = v.Visit(ctx.Expression()).([]string)
+	log.Printf("Initial result from expression: %v", v.ResultSet)
 
 	// Wenn eine Sortierklausel vorhanden ist, rufe die Sortierlogik auf
-	if sortCtx, ok := ctx.Sort_clause().(*sqparser.Sort_clauseContext); ok {
-		r.ResultSet = r.VisitSort_clause(sortCtx).([]string)
-		log.Printf("Result after sorting: %v", r.ResultSet)
+	if sortCtx, ok := ctx.Sort_clause().(*Sort_clauseContext); ok {
+		v.ResultSet = v.VisitSort_clause(sortCtx).([]string)
+		log.Printf("Result after sorting: %v", v.ResultSet)
 	}
 
 	// Wenn eine OFFSET-Klausel vorhanden ist, rufe die OFFSET-Logik auf
-	if offsetCtx, ok := ctx.Offset_clause().(*sqparser.Offset_clauseContext); ok {
-		r.ResultSet = r.VisitOffset_clause(offsetCtx).([]string)
-		log.Printf("Result after applying OFFSET: %v", r.ResultSet)
+	if offsetCtx, ok := ctx.Offset_clause().(*Offset_clauseContext); ok {
+		v.ResultSet = v.VisitOffset_clause(offsetCtx).([]string)
+		log.Printf("Result after applying OFFSET: %v", v.ResultSet)
 	}
 
 	// Wenn eine LIMIT-Klausel vorhanden ist, rufe die LIMIT-Logik auf
-	if limitCtx, ok := ctx.Limit_clause().(*sqparser.Limit_clauseContext); ok {
-		r.ResultSet = r.VisitLimit_clause(limitCtx).([]string)
-		log.Printf("Result after applying LIMIT: %v", r.ResultSet)
+	if limitCtx, ok := ctx.Limit_clause().(*Limit_clauseContext); ok {
+		v.ResultSet = v.VisitLimit_clause(limitCtx).([]string)
+		log.Printf("Result after applying LIMIT: %v", v.ResultSet)
 	}
 
 	// Gib das finale ResultSet nach Sortierung, Offset und Limit zurück
-	log.Printf("Final result after sorting, offset, and limit: %v", r.ResultSet)
-	return r.ResultSet
+	log.Printf("Final result after sorting, offset, and limit: %v", v.ResultSet)
+	return v.ResultSet
 }
 
-func (r *SearchQueryExecutor) VisitOrExpression(ctx *sqparser.OrExpressionContext) any {
+func (v *RedisQueryVisitor) VisitOrExpression(ctx *OrExpressionContext) any {
 	log.Println("Visiting Or Expression")
 	var results [][]string
 
 	for i := 0; i < len(ctx.AllAndExpression()); i++ {
-		setList := r.Visit(ctx.AndExpression(i))
+		setList := v.Visit(ctx.AndExpression(i))
 
 		if setList != nil {
 			resultList := convertToSet(setList)
@@ -133,12 +110,12 @@ func (r *SearchQueryExecutor) VisitOrExpression(ctx *sqparser.OrExpressionContex
 	return finalResult
 }
 
-func (r *SearchQueryExecutor) VisitAndExpression(ctx *sqparser.AndExpressionContext) any {
+func (v *RedisQueryVisitor) VisitAndExpression(ctx *AndExpressionContext) any {
 	log.Println("Visiting And Expression")
 	var results [][]string
 
 	for i := 0; i < len(ctx.AllComparisonExpression()); i++ {
-		currentResult := r.Visit(ctx.ComparisonExpression(i))
+		currentResult := v.Visit(ctx.ComparisonExpression(i))
 
 		resultList, ok := currentResult.([]string)
 		if !ok || resultList == nil || len(resultList) == 0 {
@@ -154,143 +131,26 @@ func (r *SearchQueryExecutor) VisitAndExpression(ctx *sqparser.AndExpressionCont
 	return finalResult
 }
 
-func (r *SearchQueryExecutor) VisitComparisonExpression(ctx *sqparser.ComparisonExpressionContext) any {
+func (v *RedisQueryVisitor) VisitComparisonExpression(ctx *ComparisonExpressionContext) any {
 	log.Println("Visiting Comparison Expression")
-	return r.Visit(ctx.Primary())
+	return v.Visit(ctx.Primary())
 }
 
-func (r *SearchQueryExecutor) _VisitPrimary(ctx *sqparser.PrimaryContext) any {
-	log.Println("Visiting Primary")
-	if ctx.Condition() != nil {
-		return r.Visit(ctx.Condition())
-	}
-	return nil
-}
-
-func (r *SearchQueryExecutor) VisitPrimary(ctx *sqparser.PrimaryContext) any {
+func (v *RedisQueryVisitor) VisitPrimary(ctx *PrimaryContext) any {
 	log.Println("Visiting Primary")
 	if ctx.LPAREN() != nil {
-		result := r.Visit(ctx.Expression())
+		result := v.Visit(ctx.Expression())
 		log.Printf("Processed expression in parentheses: %s, Result: %v", ctx.GetText(), result)
 		return result
 	}
 
 	if ctx.Condition() != nil {
-		return r.Visit(ctx.Condition())
+		return v.Visit(ctx.Condition())
 	}
 	return nil
 }
 
-func (r *SearchQueryExecutor) _VisitCondition(ctx *sqparser.ConditionContext) any {
-	identifier := ctx.IDENTIFIER().GetText()
-	var value string
-
-	// Verarbeite die '!=' Bedingung
-	if ctx.NOT_EQUALS() != nil {
-		value = trimQuotes(ctx.Value().QUOTED_LITERAL().GetText())
-		redisKey := fmt.Sprintf("%s:%s", identifier, value)
-		log.Printf("Visiting '!=' Condition: %s != %s (redisKey: %s)", identifier, value, redisKey)
-
-		allKeys := r.getAllKeysForIdentifier(identifier)
-		matchingSet := r.RedisData[redisKey]
-
-		resultSet := subtractSets(allKeys, matchingSet)
-		log.Printf("Final result for '!=' condition: %v", resultSet)
-		return resultSet
-	}
-
-	// Verarbeite die '=' Bedingung
-	if ctx.EQUALS() != nil {
-		value = trimQuotes(ctx.Value().QUOTED_LITERAL().GetText())
-		redisKey := fmt.Sprintf("%s:%s", identifier, value)
-		log.Printf("Visiting '=' Condition: %s = %s (redisKey: %s)", identifier, value, redisKey)
-
-		resultSet := r.RedisData[redisKey]
-		log.Printf("Found data for %s: %v", redisKey, resultSet)
-		return resultSet
-	}
-
-	// Verarbeite die 'IN' Bedingung
-	if ctx.IN() != nil {
-		setList := make(map[string]struct{})
-		for _, inValueCtx := range ctx.InList().AllInValue() {
-			value := trimQuotes(inValueCtx.GetText())
-			redisKey := fmt.Sprintf("%s:%s", identifier, value)
-
-			if resultSet, found := r.RedisData[redisKey]; found {
-				log.Printf("Found data for %s: %v", redisKey, resultSet)
-				for _, item := range resultSet {
-					setList[item] = struct{}{}
-				}
-			}
-		}
-
-		finalResult := make([]string, 0, len(setList))
-		for item := range setList {
-			finalResult = append(finalResult, item)
-		}
-		log.Printf("Final result for IN condition: %v", finalResult)
-		return finalResult
-	}
-
-	if ctx.Value() != nil {
-		log.Printf("Value is not nil: %s", ctx.Value().GetText())
-
-		if ctx.Value().RangeExpression() != nil {
-			log.Printf("Range expression detected: %s", ctx.Value().GetText())
-
-			// Typ assertion von IRangeExpressionContext zu *RangeExpressionContext
-			if rangeExprCtx, ok := ctx.Value().RangeExpression().(*sqparser.RangeExpressionContext); ok {
-				rangeExpr := r.VisitRangeExpression(rangeExprCtx)
-
-				// Verarbeite den Bereichsausdruck
-				redisExpression := fmt.Sprintf("@%s:%s", identifier, rangeExpr)
-				log.Printf("Processing range expression: %s", redisExpression)
-
-				// Hole die Resultate aus Redis für den Bereichsausdruck
-				if resultSet, found := r.RedisData[redisExpression]; found {
-					log.Printf("Retrieved set for %s: %v", redisExpression, resultSet)
-					return resultSet
-				} else {
-					log.Printf("No data found for range expression: %s", redisExpression)
-				}
-			} else {
-				log.Println("Error: Could not assert RangeExpressionContext type")
-			}
-		} else {
-			log.Println("No RangeExpression detected")
-		}
-	} else {
-		log.Println("Error: ctx.Value() is nil")
-	}
-
-	if ctx.ComparisonOperator() != nil {
-		log.Println("Visiting Comparison Operator")
-		value := ctx.Value().GetText()
-		op := ctx.ComparisonOperator().GetText()
-		var redisExpression string
-		switch op {
-		case ">=":
-			redisExpression = fmt.Sprintf("@%s:[%s +inf]", identifier, value)
-		case ">":
-			redisExpression = fmt.Sprintf("@%s:[(%s +inf]", identifier, value)
-		case "<=":
-			redisExpression = fmt.Sprintf("@%s:[-inf %s]", identifier, value)
-		case "<":
-			redisExpression = fmt.Sprintf("@%s:[-inf (%s]", identifier, value)
-		}
-		log.Printf("Redis Range expression: %v", redisExpression)
-		// Ruft die Daten aus der Redis-Datenbank ab
-		resultSet := r.RedisData[redisExpression]
-		log.Printf("Retrieved set for %s: %v", redisExpression, resultSet)
-		return resultSet
-	}
-
-	log.Printf("No matching condition found for: %s", identifier)
-	return nil
-}
-
-func (r *SearchQueryExecutor) VisitValue(ctx *sqparser.ValueContext) any {
+func (v *RedisQueryVisitor) VisitValue(ctx *ValueContext) any {
 	if ctx.QUOTED_LITERAL() != nil {
 		return strings.Trim(ctx.QUOTED_LITERAL().GetText(), "'")
 	}
@@ -305,17 +165,17 @@ func (r *SearchQueryExecutor) VisitValue(ctx *sqparser.ValueContext) any {
 	}
 	if ctx.RangeExpression() != nil {
 		// Hier kannst du entweder den Bereich als String zurückgeben oder den RangeExpression weiterverarbeiten
-		return r.VisitRangeExpression(ctx.RangeExpression().(*sqparser.RangeExpressionContext))
+		return v.VisitRangeExpression(ctx.RangeExpression().(*RangeExpressionContext))
 	}
 	return nil
 }
 
-func (r *SearchQueryExecutor) VisitCondition(ctx *sqparser.ConditionContext) any {
+func (v *RedisQueryVisitor) VisitCondition(ctx *ConditionContext) any {
 	identifier := ctx.IDENTIFIER().GetText()
 
 	if ctx.IN() != nil {
 		// Verwende VisitInList, um die Werte zu extrahieren
-		inList := r.Visit(ctx.InList()) // Verwende das Interface IInListContext hier
+		inList := v.Visit(ctx.InList()) // Verwende das Interface IInListContext hier
 		inValues, ok := inList.([]string)
 		if !ok || len(inValues) == 0 {
 			log.Printf("No valid values found for 'IN' clause with identifier %s", identifier)
@@ -326,7 +186,7 @@ func (r *SearchQueryExecutor) VisitCondition(ctx *sqparser.ConditionContext) any
 		for _, value := range inValues {
 			redisKey := fmt.Sprintf("%s:%s", identifier, value)
 
-			if resultSet, found := r.RedisData[redisKey]; found {
+			if resultSet, found := v.RedisData[redisKey]; found {
 				log.Printf("Found data for %s: %v", redisKey, resultSet)
 				for _, item := range resultSet {
 					setList[item] = struct{}{}
@@ -354,20 +214,20 @@ func (r *SearchQueryExecutor) VisitCondition(ctx *sqparser.ConditionContext) any
 		}
 		redisExpression := fmt.Sprintf("@%s:%%%%%s%%%%", identifier, fuzzyValue)
 		log.Printf("Fuzzy comparison detected: %s", redisExpression)
-		resultSet := r.RedisData[redisExpression]
+		resultSet := v.RedisData[redisExpression]
 		log.Printf("Found data for %s: %v", redisExpression, resultSet)
 		return resultSet
 	}
 
 	// Cast von IValueContext zu *ValueContext
-	valueCtx, ok := ctx.Value().(*sqparser.ValueContext)
+	valueCtx, ok := ctx.Value().(*ValueContext)
 	if !ok {
 		log.Printf("Error: Could not cast ctx.Value() to *ValueContext for identifier %s", identifier)
 		return nil
 	}
 
 	// Verwende VisitValue, um den Wert zu erhalten
-	value, ok := r.VisitValue(valueCtx).(string)
+	value, ok := v.VisitValue(valueCtx).(string)
 	if !ok || value == "" {
 		log.Printf("No valid value found for identifier %s", identifier)
 		return nil
@@ -377,7 +237,7 @@ func (r *SearchQueryExecutor) VisitCondition(ctx *sqparser.ConditionContext) any
 	if ctx.Value().WILDCARD() != nil {
 		redisExpression := fmt.Sprintf("@%s:%s", identifier, value)
 		log.Printf("Wildcard search detected: %s", redisExpression)
-		resultSet := r.RedisData[redisExpression]
+		resultSet := v.RedisData[redisExpression]
 		log.Printf("Found data for %s: %v", redisExpression, resultSet)
 		return resultSet
 	}
@@ -387,15 +247,15 @@ func (r *SearchQueryExecutor) VisitCondition(ctx *sqparser.ConditionContext) any
 		log.Printf("Range expression detected: %s", ctx.Value().GetText())
 		redisExpression := fmt.Sprintf("@%s:%s", identifier, value)
 		log.Printf("Processing range expression: %s", redisExpression)
-		resultSet := r.RedisData[redisExpression]
+		resultSet := v.RedisData[redisExpression]
 		log.Printf("Found data for %s: %v", redisExpression, resultSet)
 		return resultSet
 	}
 
 	// NOT EQUALS-Abfrage
 	if ctx.NOT_EQUALS() != nil && value != "" {
-		allKeys := r.getAllKeysForIdentifier(identifier)
-		matchingSet := r.RedisData[fmt.Sprintf("%s:%s", identifier, value)]
+		allKeys := v.getAllKeysForIdentifier(identifier)
+		matchingSet := v.RedisData[fmt.Sprintf("%s:%s", identifier, value)]
 		result := subtractSets(allKeys, matchingSet)
 		log.Printf("Processed '!=' condition: %s, Result: %v", ctx.GetText(), result)
 		return result
@@ -405,7 +265,7 @@ func (r *SearchQueryExecutor) VisitCondition(ctx *sqparser.ConditionContext) any
 	if ctx.EQUALS() != nil && value != "" {
 		redisExpression := fmt.Sprintf("%s:%s", identifier, value)
 		log.Printf("Processed '=' condition: %s", redisExpression)
-		resultSet := r.RedisData[redisExpression]
+		resultSet := v.RedisData[redisExpression]
 		log.Printf("Found data for %s: %v", redisExpression, resultSet)
 		return resultSet
 	}
@@ -425,7 +285,7 @@ func (r *SearchQueryExecutor) VisitCondition(ctx *sqparser.ConditionContext) any
 			redisExpression = fmt.Sprintf("@%s:[-inf (%s]", identifier, value)
 		}
 		log.Printf("Processed comparison operator: %s", redisExpression)
-		resultSet := r.RedisData[redisExpression]
+		resultSet := v.RedisData[redisExpression]
 		log.Printf("Found data for %s: %v", redisExpression, resultSet)
 		return resultSet
 	}
@@ -439,7 +299,7 @@ func (r *SearchQueryExecutor) VisitCondition(ctx *sqparser.ConditionContext) any
 
 		setList := make(map[string]struct{})
 		for _, expr := range inList {
-			resultSet := r.RedisData[expr]
+			resultSet := v.RedisData[expr]
 			log.Printf("Processing OR condition (IN transformation): %s, Retrieved Set: %v", expr, resultSet)
 			for _, item := range resultSet {
 				setList[item] = struct{}{}
@@ -456,16 +316,16 @@ func (r *SearchQueryExecutor) VisitCondition(ctx *sqparser.ConditionContext) any
 	return nil
 }
 
-func (r *SearchQueryExecutor) VisitInList(ctx *sqparser.InListContext) any {
+func (v *RedisQueryVisitor) VisitInList(ctx *InListContext) any {
 	var values []string
 	for _, inValueCtx := range ctx.AllInValue() {
-		value := r.Visit(inValueCtx).(string) // Expecting a string from VisitInValue
+		value := v.Visit(inValueCtx).(string) // Expecting a string from VisitInValue
 		values = append(values, value)
 	}
 	return values
 }
 
-func (r *SearchQueryExecutor) VisitInValue(ctx *sqparser.InValueContext) any {
+func (v *RedisQueryVisitor) VisitInValue(ctx *InValueContext) any {
 	if ctx.QUOTED_LITERAL() != nil {
 		return strings.Trim(ctx.QUOTED_LITERAL().GetText(), "'")
 	}
@@ -475,9 +335,9 @@ func (r *SearchQueryExecutor) VisitInValue(ctx *sqparser.InValueContext) any {
 	return ""
 }
 
-func (r *SearchQueryExecutor) VisitSort_clause(ctx *sqparser.Sort_clauseContext) any {
+func (v *RedisQueryVisitor) VisitSort_clause(ctx *Sort_clauseContext) any {
 	// Erstellt die orderMaps
-	orderMaps := r.createOrderMaps(ctx.AllIDENTIFIER())
+	orderMaps := v.createOrderMaps(ctx.AllIDENTIFIER())
 
 	// Array zur Speicherung von Comparator-Funktionen
 	comparators := make([]func(id1, id2 string) int, 0, len(ctx.AllIDENTIFIER()))
@@ -565,12 +425,12 @@ func (r *SearchQueryExecutor) VisitSort_clause(ctx *sqparser.Sort_clauseContext)
 	// Wenn keine Comparatoren vorhanden sind, gib die ursprüngliche Liste zurück
 	if len(comparators) == 0 {
 		log.Println("Warning: No valid sort fields provided, returning original order")
-		return r.ResultSet
+		return v.ResultSet
 	}
 
 	// Sortiere das Ergebnis basierend auf den Comparatoren
-	sort.SliceStable(r.ResultSet, func(i, j int) bool {
-		id1, id2 := r.ResultSet[i], r.ResultSet[j]
+	sort.SliceStable(v.ResultSet, func(i, j int) bool {
+		id1, id2 := v.ResultSet[i], v.ResultSet[j]
 		for _, comparator := range comparators {
 			if result := comparator(id1, id2); result != 0 {
 				return result < 0
@@ -580,37 +440,37 @@ func (r *SearchQueryExecutor) VisitSort_clause(ctx *sqparser.Sort_clauseContext)
 	})
 
 	// Gib das sortierte Ergebnis zurück
-	log.Printf("Final result after sorting: %v", r.ResultSet)
-	return r.ResultSet
+	log.Printf("Final result after sorting: %v", v.ResultSet)
+	return v.ResultSet
 }
 
-func (r *SearchQueryExecutor) VisitOffset_clause(ctx *sqparser.Offset_clauseContext) any {
+func (v *RedisQueryVisitor) VisitOffset_clause(ctx *Offset_clauseContext) any {
 	log.Println("Visiting Offset Clause")
 
 	offset, _ := strconv.Atoi(ctx.NUMBER().GetText()) // Konvertiere die OFFSET-Zahl
-	if offset < len(r.ResultSet) {
-		r.ResultSet = r.ResultSet[offset:]
+	if offset < len(v.ResultSet) {
+		v.ResultSet = v.ResultSet[offset:]
 	} else {
-		r.ResultSet = []string{} // Falls der Offset größer ist als die Länge des Ergebnisses
+		v.ResultSet = []string{} // Falls der Offset größer ist als die Länge des Ergebnisses
 	}
 
-	log.Printf("Result after applying OFFSET: %v", r.ResultSet)
-	return r.ResultSet
+	log.Printf("Result after applying OFFSET: %v", v.ResultSet)
+	return v.ResultSet
 }
 
-func (r *SearchQueryExecutor) VisitLimit_clause(ctx *sqparser.Limit_clauseContext) any {
+func (v *RedisQueryVisitor) VisitLimit_clause(ctx *Limit_clauseContext) any {
 	log.Println("Visiting Limit Clause")
 
 	limit, _ := strconv.Atoi(ctx.NUMBER().GetText()) // Konvertiere die LIMIT-Zahl
-	if limit < len(r.ResultSet) {
-		r.ResultSet = r.ResultSet[:limit]
+	if limit < len(v.ResultSet) {
+		v.ResultSet = v.ResultSet[:limit]
 	}
 
-	log.Printf("Result after applying LIMIT: %v", r.ResultSet)
-	return r.ResultSet
+	log.Printf("Result after applying LIMIT: %v", v.ResultSet)
+	return v.ResultSet
 }
 
-func (r *SearchQueryExecutor) VisitRangeExpression(ctx *sqparser.RangeExpressionContext) any {
+func (v *RedisQueryVisitor) VisitRangeExpression(ctx *RangeExpressionContext) any {
 	log.Println("VisitRangeExpression called")
 
 	// Extrahiere die Nummern aus dem Kontext
@@ -630,7 +490,7 @@ func (r *SearchQueryExecutor) VisitRangeExpression(ctx *sqparser.RangeExpression
 	return rangeExpr
 }
 
-func (r *SearchQueryExecutor) createOrderMaps(identifiers []antlr.TerminalNode) map[string]map[string]interface{} {
+func (v *RedisQueryVisitor) createOrderMaps(identifiers []antlr.TerminalNode) map[string]map[string]interface{} {
 	orderMaps := make(map[string]map[string]interface{})
 
 	// Iteriere über die Identifiers, die im Query verwendet werden
@@ -638,7 +498,7 @@ func (r *SearchQueryExecutor) createOrderMaps(identifiers []antlr.TerminalNode) 
 		field := identifierCtx.GetText()
 
 		// Überprüfe, ob das Feld in den Redis-Daten vorhanden ist
-		entries, ok := r.RedisData["sorting:"+field]
+		entries, ok := v.RedisData["sorting:"+field]
 		if !ok || len(entries) == 0 {
 			log.Printf("Warning: Field %s not available in Redis data", field)
 			continue
@@ -672,9 +532,9 @@ func (r *SearchQueryExecutor) createOrderMaps(identifiers []antlr.TerminalNode) 
 }
 
 // Hilfsfunktion, um alle möglichen Werte für einen bestimmten identifier zu holen
-func (r *SearchQueryExecutor) getAllKeysForIdentifier(identifier string) []string {
+func (v *RedisQueryVisitor) getAllKeysForIdentifier(identifier string) []string {
 	allValues := make([]string, 0)
-	for key, values := range r.RedisData {
+	for key, values := range v.RedisData {
 		if keyHasIdentifier(key, identifier) {
 			allValues = append(allValues, values...)
 		}

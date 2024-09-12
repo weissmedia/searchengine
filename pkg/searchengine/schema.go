@@ -1,4 +1,4 @@
-package schema
+package searchengine
 
 // SearchSchema definiert das Schema für Suchabfragen
 type SearchSchema struct {

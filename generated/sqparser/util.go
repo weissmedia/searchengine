@@ -2,8 +2,8 @@ package sqparser
 
 import (
 	"fmt"
-
 	"github.com/antlr4-go/antlr/v4"
+	"github.com/weissmedia/searchengine/internal/core"
 )
 
 type syntaxError struct {
@@ -64,4 +64,47 @@ func Parse(input string) (tree IQueryContext, err error) {
 
 	// Parsen des Queries
 	return parser.Query(), nil
+}
+
+func IntersectSets(sets ...map[string]struct{}) map[string]struct{} {
+	if len(sets) == 0 {
+		return nil
+	}
+	result := make(map[string]struct{})
+	for elem := range sets[0] {
+		result[elem] = struct{}{}
+	}
+	for _, set := range sets[1:] {
+		for elem := range result {
+			if _, found := set[elem]; !found {
+				delete(result, elem)
+			}
+		}
+	}
+	return result
+}
+
+func UnionSets(sets ...map[string]struct{}) map[string]struct{} {
+	result := make(map[string]struct{})
+	for _, set := range sets {
+		for elem := range set {
+			result[elem] = struct{}{}
+		}
+	}
+	return result
+}
+
+func DetermineComparisonOperator(comparisonCtx IComparisonOperatorContext) (core.ComparisonOperator, error) {
+	switch {
+	case comparisonCtx.GREATER() != nil:
+		return core.OpGreater, nil
+	case comparisonCtx.GREATER_EQUAL() != nil:
+		return core.OpGreaterEqual, nil
+	case comparisonCtx.LESS() != nil:
+		return core.OpLess, nil
+	case comparisonCtx.LESS_EQUAL() != nil:
+		return core.OpLessEqual, nil
+	default:
+		return "", fmt.Errorf("unsupported comparison operator")
+	}
 }

@@ -1,6 +1,7 @@
-// Code generated from /app/antlr/SearchQuery.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from SearchQuery.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
 package sqparser // SearchQuery
+
 import (
 	"fmt"
 	"strconv"
@@ -334,6 +335,18 @@ func (s *QueryContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) 
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
+func (s *QueryContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterQuery(s)
+	}
+}
+
+func (s *QueryContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitQuery(s)
+	}
+}
+
 func (s *QueryContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 	switch t := visitor.(type) {
 	case SearchQueryVisitor:
@@ -522,6 +535,18 @@ func (s *ExpressionContext) ToStringTree(ruleNames []string, recog antlr.Recogni
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
+func (s *ExpressionContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterExpression(s)
+	}
+}
+
+func (s *ExpressionContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitExpression(s)
+	}
+}
+
 func (s *ExpressionContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 	switch t := visitor.(type) {
 	case SearchQueryVisitor:
@@ -658,6 +683,18 @@ func (s *OrExpressionContext) GetRuleContext() antlr.RuleContext {
 
 func (s *OrExpressionContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *OrExpressionContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterOrExpression(s)
+	}
+}
+
+func (s *OrExpressionContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitOrExpression(s)
+	}
 }
 
 func (s *OrExpressionContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
@@ -828,6 +865,18 @@ func (s *AndExpressionContext) ToStringTree(ruleNames []string, recog antlr.Reco
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
+func (s *AndExpressionContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterAndExpression(s)
+	}
+}
+
+func (s *AndExpressionContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitAndExpression(s)
+	}
+}
+
 func (s *AndExpressionContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 	switch t := visitor.(type) {
 	case SearchQueryVisitor:
@@ -960,6 +1009,18 @@ func (s *ComparisonExpressionContext) ToStringTree(ruleNames []string, recog ant
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
+func (s *ComparisonExpressionContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterComparisonExpression(s)
+	}
+}
+
+func (s *ComparisonExpressionContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitComparisonExpression(s)
+	}
+}
+
 func (s *ComparisonExpressionContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 	switch t := visitor.(type) {
 	case SearchQueryVisitor:
@@ -1087,6 +1148,18 @@ func (s *PrimaryContext) GetRuleContext() antlr.RuleContext {
 
 func (s *PrimaryContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *PrimaryContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterPrimary(s)
+	}
+}
+
+func (s *PrimaryContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitPrimary(s)
+	}
 }
 
 func (s *PrimaryContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
@@ -1289,6 +1362,18 @@ func (s *ConditionContext) GetRuleContext() antlr.RuleContext {
 
 func (s *ConditionContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *ConditionContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterCondition(s)
+	}
+}
+
+func (s *ConditionContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitCondition(s)
+	}
 }
 
 func (s *ConditionContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
@@ -1516,6 +1601,18 @@ func (s *ComparisonOperatorContext) ToStringTree(ruleNames []string, recog antlr
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
+func (s *ComparisonOperatorContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterComparisonOperator(s)
+	}
+}
+
+func (s *ComparisonOperatorContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitComparisonOperator(s)
+	}
+}
+
 func (s *ComparisonOperatorContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 	switch t := visitor.(type) {
 	case SearchQueryVisitor:
@@ -1645,6 +1742,18 @@ func (s *ValueContext) GetRuleContext() antlr.RuleContext {
 
 func (s *ValueContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *ValueContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterValue(s)
+	}
+}
+
+func (s *ValueContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitValue(s)
+	}
 }
 
 func (s *ValueContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
@@ -1812,6 +1921,18 @@ func (s *RangeExpressionContext) GetRuleContext() antlr.RuleContext {
 
 func (s *RangeExpressionContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *RangeExpressionContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterRangeExpression(s)
+	}
+}
+
+func (s *RangeExpressionContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitRangeExpression(s)
+	}
 }
 
 func (s *RangeExpressionContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
@@ -2010,6 +2131,18 @@ func (s *InListContext) ToStringTree(ruleNames []string, recog antlr.Recognizer)
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
+func (s *InListContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterInList(s)
+	}
+}
+
+func (s *InListContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitInList(s)
+	}
+}
+
 func (s *InListContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 	switch t := visitor.(type) {
 	case SearchQueryVisitor:
@@ -2156,6 +2289,18 @@ func (s *InValueContext) ToStringTree(ruleNames []string, recog antlr.Recognizer
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
+func (s *InValueContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterInValue(s)
+	}
+}
+
+func (s *InValueContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitInValue(s)
+	}
+}
+
 func (s *InValueContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 	switch t := visitor.(type) {
 	case SearchQueryVisitor:
@@ -2288,6 +2433,18 @@ func (s *Sort_clauseContext) GetRuleContext() antlr.RuleContext {
 
 func (s *Sort_clauseContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *Sort_clauseContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterSort_clause(s)
+	}
+}
+
+func (s *Sort_clauseContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitSort_clause(s)
+	}
 }
 
 func (s *Sort_clauseContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
@@ -2460,6 +2617,18 @@ func (s *Limit_clauseContext) ToStringTree(ruleNames []string, recog antlr.Recog
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
+func (s *Limit_clauseContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterLimit_clause(s)
+	}
+}
+
+func (s *Limit_clauseContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitLimit_clause(s)
+	}
+}
+
 func (s *Limit_clauseContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 	switch t := visitor.(type) {
 	case SearchQueryVisitor:
@@ -2552,6 +2721,18 @@ func (s *Offset_clauseContext) GetRuleContext() antlr.RuleContext {
 
 func (s *Offset_clauseContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *Offset_clauseContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.EnterOffset_clause(s)
+	}
+}
+
+func (s *Offset_clauseContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SearchQueryListener); ok {
+		listenerT.ExitOffset_clause(s)
+	}
 }
 
 func (s *Offset_clauseContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {

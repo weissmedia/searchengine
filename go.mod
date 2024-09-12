@@ -3,8 +3,10 @@ module github.com/weissmedia/searchengine
 go 1.22.4
 
 require (
+	github.com/RediSearch/redisearch-go/v2 v2.1.1
 	github.com/antlr4-go/antlr/v4 v4.13.1
 	github.com/go-redis/redis/v8 v8.11.5
+	github.com/redis/go-redis/v9 v9.6.1
 	github.com/spf13/cobra v1.8.1
 )
 
