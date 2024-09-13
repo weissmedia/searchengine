@@ -210,3 +210,12 @@ func (b *RedisBackend) executeSearch(query string) (map[string]struct{}, error) 
 	log.Printf("Final Search Results: %v", searchResults)
 	return searchResults, nil
 }
+
+func (b *RedisBackend) UpdateSearchIndex(indexName string) (bool, error) {
+	err := b.redisSearchClient.RecreateRedisearchIndex(indexName)
+	if err != nil {
+		log.Printf("Failed to recreate index: %v", err)
+		return false, err
+	}
+	return true, nil
+}

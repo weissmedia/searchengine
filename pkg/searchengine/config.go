@@ -1,19 +1,10 @@
 package searchengine
 
-// Config enthält die Konfigurationseinstellungen für die SearchEngine
-type Config struct {
-	RedisAddress   string
-	UseRedisSearch bool
-	SearchSchema   SearchSchema // Kennzeichnung, dass es sich um ein Suchschema handelt
-	IndexName      string       // Anwender kann den Indexnamen setzen
-}
+import (
+	cfg "github.com/weissmedia/searchengine/internal/config"
+)
 
-func (c *Config) GetRedisAddr() string {
-	return c.RedisAddress
-}
-func (c *Config) GetIndexName() string {
-	return c.IndexName
-}
-func (c *Config) GetSearchSchema() SearchSchema {
-	return c.SearchSchema
+// NewConfig creates a new instance of Config by reading environment variables and loading the search schema file.
+func NewConfig() (*cfg.Config, error) {
+	return cfg.NewConfig()
 }

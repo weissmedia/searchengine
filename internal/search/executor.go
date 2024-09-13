@@ -17,7 +17,6 @@ import (
 type Executor struct {
 	*sqparser.BaseSearchQueryVisitor
 	ctx       context.Context
-	RedisData map[string][]string
 	ResultSet []string
 	backend   backend.SearchBackend
 }
@@ -532,48 +531,6 @@ func (r *Executor) VisitRangeExpression(ctx *sqparser.RangeExpressionContext) an
 	log.Printf("Range expression: %s", rangeExpr)
 
 	return rangeValues
-}
-
-func (r *Executor) createOrderMaps(identifiers []antlr.TerminalNode) map[string]map[string]interface{} {
-	orderMaps := make(map[string]map[string]interface{})
-
-	// Iteriere über die Identifiers, die im Query verwendet werden
-	for _, identifierCtx := range identifiers {
-		field := identifierCtx.GetText()
-
-		// Überprüfe, ob das Feld in den Redis-Daten vorhanden ist
-		entries, ok := r.RedisData["sorting:"+field]
-
-		if !ok || len(entries) == 0 {
-			log.Printf("Warning: Field %s not available in Redis data", field)
-			continue
-		}
-
-		orderMap := make(map[string]interface{})
-
-		// Verarbeite die Einträge und konvertiere sie in die passende Struktur
-		for _, entry := range entries {
-			parts := strings.Split(entry, ":")
-			if len(parts) != 2 {
-				continue
-			}
-
-			id := parts[1]    // Der erste Teil ist die ID
-			value := parts[0] // Der zweite Teil ist der Wert
-
-			// Versuche, die Werte zu Zahlen zu konvertieren, wenn möglich
-			if numericValue, err := strconv.Atoi(value); err == nil {
-				orderMap[id] = numericValue // Wenn der Wert numerisch ist
-			} else {
-				orderMap[id] = value // Wenn der Wert ein String ist
-			}
-		}
-
-		// Speichere das orderMap für das aktuelle Feld in orderMaps
-		orderMaps[field] = orderMap
-	}
-
-	return orderMaps
 }
 
 // Hilfsfunktion zur Konvertierung von map[string]struct{} zu []string

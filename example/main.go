@@ -2,41 +2,33 @@ package main
 
 import (
 	"fmt"
-	"github.com/weissmedia/searchengine/internal/config"
-	"github.com/weissmedia/searchengine/internal/query"
+	"github.com/weissmedia/searchengine/pkg/searchengine"
+	"golang.org/x/net/context"
+	"log"
+	"os"
 )
 
 func main() {
-	schema := []config.SearchSchema{
-		{Name: "title", Type: "TEXT"},
-		{Name: "description", Type: "TEXT"},
-		{Name: "price", Type: "NUMERIC"},
-		{Name: "category", Type: "TAG"},
-	}
+	os.Setenv("SEARCH_SCHEMA_FILE", "./example/searchschema.json")
+	os.Setenv("SEARCH_INDEX_NAME", "idx2")
+	os.Setenv("NAMESPACE_PREFIX", "opus.bdl.datapool")
+	os.Setenv("REDIS_FILTER_PREFIX", "opus.bdl.datapool:filter:")
+	os.Setenv("REDIS_SORTING_PREFIX", "opus.bdl.datapool:sorting:")
 
-	// Benutzerdefinierte Config erstellen
-	cfg := config.Config{
-		RedisAddress: "localhost:6379", // pflicht
-		IndexName:    "myIndex",        // optional
-		SearchSchema: schema,
-	}
-
-	// Erstelle die SearchEngine und übergebe das Backend und die Config
-	se := query.NewSearchEngine(cfg)
-
-	// Recreate das Suchschema
-	err := se.RecreateSchema()
+	// Load the configuration, including the schema from the file
+	cfg, err := searchengine.NewConfig()
 	if err != nil {
-		fmt.Println("Error recreating schema:", err)
-		return
+		log.Fatalf("Error loading config: %v\n", err)
 	}
 
-	// Führe eine Suche durch
-	result, err := se.Search("title:Redis")
+	// Use the configuration (e.g., connect to Redis, use schema)
+	fmt.Printf("Loaded Config: %+v\n", cfg)
+
+	engine := searchengine.NewEngine(cfg)
+	ctx := context.Background()
+	search, err := engine.Search(ctx, "inbox = 'AR_IB_AK_VL_KB_AHV'")
 	if err != nil {
-		fmt.Println("Error:", err)
-		return
+		log.Fatalf("Error query: %v\n", err)
 	}
-
-	fmt.Println("Search result:", result)
+	fmt.Println(search)
 }

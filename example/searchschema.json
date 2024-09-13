@@ -1,0 +1,32 @@
+{
+  "cases_dyna": {
+    "case_state_text": "text",
+    "case_type_name": "text",
+    "inbox": "text",
+    "owner_id": "text",
+    "org_unit": "text"
+  },
+  "cases_stat": {
+    "partner_protection_code": "numeric"
+  },
+  "partners_member": {
+    "firstname_orgname_addon": "text",
+    "lastname_orgname": "text",
+    "street": "text",
+    "city": "text",
+    "nationality": "text",
+    "partner_protection_code": "numeric",
+    "date_of_birth_int": "numeric",
+    "date_of_death_int": "numeric"
+  },
+  "partners_insuree": {
+    "firstname_orgname_addon": "text",
+    "lastname_orgname": "text",
+    "street": "text",
+    "city": "text",
+    "nationality": "text",
+    "partner_protection_code": "numeric",
+    "date_of_birth_int": "numeric",
+    "date_of_death_int": "numeric"
+  }
+}

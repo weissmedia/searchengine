@@ -12,15 +12,23 @@ import (
 type RedisClient struct {
 	client        *redis.Client
 	fieldMappings map[string]string
+	prefixFilter  string
+	prefixSorting string
 }
 
-func NewRedisClient() *RedisClient {
+// NewRedisClient creates a new Redis client using the given host, port, and Redis DB.
+func NewRedisClient(host string, port, db int, prefixFilter, prefixSorting string) *RedisClient {
+	address := fmt.Sprintf("%s:%d", host, port) // Construct the address from host and port
+
 	client := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-		DB:   0,
+		Addr: address, // Use constructed address
+		DB:   db,      // Use the provided Redis DB
 	})
+
 	return &RedisClient{
-		client: client,
+		client:        client,
+		prefixFilter:  prefixFilter,
+		prefixSorting: prefixSorting,
 	}
 }
 
@@ -170,14 +178,12 @@ func (c *RedisClient) ZRangeMap(ctx context.Context, keys []string) (map[string]
 
 func (c *RedisClient) createFilterField(suffix string) string {
 	internalAttribute := c.getInternalField(suffix, nil)
-	// todo: make it configurable as quickly as possible
-	return fmt.Sprintf("opus.bdl.datapool:filter:%s", internalAttribute)
+	return fmt.Sprintf("%s:%s", c.prefixFilter, internalAttribute)
 }
 
 func (c *RedisClient) createSortField(suffix string) string {
 	internalAttribute := c.getInternalField(suffix, nil)
-	// todo: make it configurable as quickly as possible
-	return fmt.Sprintf("opus.bdl.datapool:sorting:%s", internalAttribute)
+	return fmt.Sprintf("%s:%s", c.prefixSorting, internalAttribute)
 }
 
 func (c *RedisClient) getInternalField(externalField string, customMappings map[string]string) string {
