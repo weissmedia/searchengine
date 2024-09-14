@@ -43,6 +43,7 @@ func (r *Executor) Execute(tree antlr.ParseTree) (*core.ExecutionResult, error) 
 	return &core.ExecutionResult{
 		ResultSet: resultSet,
 		Timings:   r.profiler.GetTimings(),
+		TotalTime: r.profiler.GetTotalTime(),
 	}, nil
 }
 
@@ -52,6 +53,10 @@ func (r *Executor) Visit(tree antlr.ParseTree) any {
 		return nil
 	}
 	r.log.Debug("Visiting node", zap.String("type", fmt.Sprintf("%T", tree)))
+
+	// Profiling den Besuch des Baumes
+	defer r.profiler.DeferTiming("Visit ParseTree")()
+
 	return tree.Accept(r)
 }
 
@@ -92,28 +97,30 @@ func (r *Executor) VisitExpression(ctx *sqparser.ExpressionContext) any {
 }
 
 func (r *Executor) VisitQuery(ctx *sqparser.QueryContext) any {
-	r.log.Debug("Visiting Query")
+	defer r.profiler.DeferTiming("VisitQuery")()
 
-	// Visit the place and get the results
+	// Profiling das Besuchen des Ausdrucks
 	resultSet := r.Visit(ctx.Expression()).(map[string]struct{})
 	r.log.Debug("Initial result from expression", zap.Any("resultSet", resultSet))
 
-	r.ResultSet = convertSetToSlice(resultSet)
+	// Konvertiere Set zu Slice
+	defer r.profiler.DeferTiming("ConvertSetToSlice")()
+	r.ResultSet = r.convertSetToSlice(resultSet)
 	r.log.Debug("Result after convertSetToSlice", zap.Strings("resultSet", r.ResultSet))
 
-	// If a sort clause is present, call the sort logic
+	// Profiling für Sortierung, falls Sort-Klausel vorhanden ist
 	if sortCtx, ok := ctx.Sort_clause().(*sqparser.Sort_clauseContext); ok {
 		r.ResultSet = r.VisitSort_clause(sortCtx).([]string)
 		r.log.Debug("Result after sorting", zap.Strings("resultSet", r.ResultSet))
 	}
 
-	// If an OFFSET clause is present, call the OFFSET logic
+	// Profiling für Offset, falls vorhanden
 	if offsetCtx, ok := ctx.Offset_clause().(*sqparser.Offset_clauseContext); ok {
 		r.ResultSet = r.VisitOffset_clause(offsetCtx).([]string)
 		r.log.Debug("Result after applying OFFSET", zap.Strings("resultSet", r.ResultSet))
 	}
 
-	// If a LIMIT clause is present, call the LIMIT logic.
+	// Profiling für Limit, falls vorhanden
 	if limitCtx, ok := ctx.Limit_clause().(*sqparser.Limit_clauseContext); ok {
 		r.ResultSet = r.VisitLimit_clause(limitCtx).([]string)
 		r.log.Debug("Result after applying LIMIT", zap.Strings("resultSet", r.ResultSet))
@@ -124,7 +131,7 @@ func (r *Executor) VisitQuery(ctx *sqparser.QueryContext) any {
 }
 
 func (r *Executor) VisitAndExpression(ctx *sqparser.AndExpressionContext) any {
-	r.log.Debug("Visiting And Expression")
+	defer r.profiler.DeferTiming("VisitAndExpression")()
 
 	var finalResult map[string]struct{}
 
@@ -154,7 +161,8 @@ func (r *Executor) VisitAndExpression(ctx *sqparser.AndExpressionContext) any {
 }
 
 func (r *Executor) VisitOrExpression(ctx *sqparser.OrExpressionContext) any {
-	r.log.Debug("Visiting Or Expression")
+	defer r.profiler.DeferTiming("VisitOrExpression")()
+
 	finalResult := make(map[string]struct{})
 
 	for i := 0; i < len(ctx.AllAndExpression()); i++ {
@@ -176,14 +184,16 @@ func (r *Executor) VisitOrExpression(ctx *sqparser.OrExpressionContext) any {
 }
 
 func (r *Executor) VisitComparisonExpression(ctx *sqparser.ComparisonExpressionContext) any {
-	r.log.Debug("Visiting Comparison Expression")
+	defer r.profiler.DeferTiming("VisitComparisonExpression")()
+
 	result := r.Visit(ctx.Primary())
 	r.log.Debug("Result from Primary in Comparison Expression", zap.Any("result", result))
 	return result
 }
 
 func (r *Executor) VisitPrimary(ctx *sqparser.PrimaryContext) any {
-	r.log.Debug("Visiting Primary")
+	defer r.profiler.DeferTiming("VisitPrimary")()
+
 	if ctx.LPAREN() != nil {
 		result := r.Visit(ctx.Expression())
 		r.log.Debug("Processed expression in parentheses", zap.String("expression", ctx.GetText()), zap.Any("result", result))
@@ -227,26 +237,34 @@ func (r *Executor) VisitValue(ctx *sqparser.ValueContext) any {
 }
 
 func (r *Executor) VisitCondition(ctx *sqparser.ConditionContext) any {
+	defer r.profiler.DeferTiming("VisitCondition")()
+
 	identifier := ctx.IDENTIFIER().GetText()
 
-	// IN query
+	// IN query Profiling
 	if ctx.IN() != nil {
-		inList := r.Visit(ctx.InList()) // Use the IInListContext interface here
+		inList := r.Visit(ctx.InList())
 		inValues, ok := inList.([]string)
 		if !ok || len(inValues) == 0 {
 			r.log.Warn("No valid values found for 'IN' clause", zap.String("identifier", identifier))
 			return nil
 		}
-		result, err := r.backend.GetMap(r.ctx, identifier, inValues)
-		if err != nil {
-			r.log.Error("Error getting map for 'IN' clause", zap.String("identifier", identifier), zap.Error(err))
-			return nil
-		}
-		r.log.Debug("Returning result for IN condition", zap.Any("result", result))
+
+		// Profiling für Redis IN query
+		result := r.profiler.TimeOperationWithReturn("GetMap for IN query", func() interface{} {
+			result, err := r.backend.GetMap(r.ctx, identifier, inValues)
+			if err != nil {
+				r.log.Error("Error getting map for 'IN' clause", zap.String("identifier", identifier), zap.Error(err))
+				return nil
+			}
+			r.log.Debug("Returning result for IN condition", zap.Any("result", result))
+			return result
+		}).(map[string]struct{})
+
 		return result
 	}
 
-	// Fuzzy query
+	// Profiling für Fuzzy query
 	if ctx.FUZZY() != nil {
 		value := strings.Trim(ctx.QUOTED_LITERAL().GetText(), "'")
 
@@ -255,11 +273,15 @@ func (r *Executor) VisitCondition(ctx *sqparser.ConditionContext) any {
 			return nil
 		}
 
-		resultSet, err := r.backend.SearchFuzzyMap(identifier, value)
-		if err != nil {
-			r.log.Error("Error during fuzzy search", zap.String("identifier", identifier), zap.Error(err))
-			return nil
-		}
+		// Profiling für Redis Fuzzy-Abfrage
+		resultSet := r.profiler.TimeOperationWithReturn("SearchFuzzyMap", func() interface{} {
+			resultSet, err := r.backend.SearchFuzzyMap(identifier, value)
+			if err != nil {
+				r.log.Error("Error during fuzzy search", zap.String("identifier", identifier), zap.Error(err))
+				return nil
+			}
+			return resultSet
+		}).(map[string]struct{})
 
 		r.log.Debug("Found data for fuzzy search", zap.Any("resultSet", resultSet))
 		return resultSet
@@ -379,97 +401,96 @@ func (r *Executor) VisitInValue(ctx *sqparser.InValueContext) any {
 }
 
 func (r *Executor) VisitSort_clause(ctx *sqparser.Sort_clauseContext) any {
-	fields := core.NewSortFieldList(r.log)
-	for i, identifierCtx := range ctx.AllIDENTIFIER() {
-		order := "ASC"
-		if ctx.ASC(i) != nil {
-			order = "ASC"
-		} else if ctx.DESC(i) != nil {
-			order = "DESC"
-		}
-		fields.AddSortField(identifierCtx.GetText(), order)
-	}
+	defer r.profiler.DeferTiming("VisitSort_clause")()
 
-	resultChan, err := r.backend.GetSortedFieldValuesMap(r.ctx, fields)
-	if err != nil {
-		r.log.Error("Error getting sorted field values", zap.Error(err))
-	}
+	fields := core.NewSortFieldList(r.log)
+
+	// Profiling für das Hinzufügen von Sortierfeldern
+	r.profiler.TimeOperation("AddSortFields", func() {
+		for i, identifierCtx := range ctx.AllIDENTIFIER() {
+			order := "ASC"
+			if ctx.ASC(i) != nil {
+				order = "ASC"
+			} else if ctx.DESC(i) != nil {
+				order = "DESC"
+			}
+			fields.AddSortField(identifierCtx.GetText(), order)
+		}
+	})
+
+	// Erfasse Zeit für die Redis-Abfrage der Sortierungswerte
+	resultChan := r.profiler.TimeOperationWithReturn("GetSortedFieldValuesMap", func() interface{} {
+		resultChan, err := r.backend.GetSortedFieldValuesMap(r.ctx, fields)
+		if err != nil {
+			r.log.Error("Error getting sorted field values", zap.Error(err))
+			return nil
+		}
+		return resultChan // return the receive-only channel ←chan core.SortResult
+	}).(<-chan core.SortResult) // Correctly assert as a receive-only channel
+
 	results := make([]core.SortResult, fields.Len())
-	for result := range resultChan {
-		results[result.Index] = result
-	}
+
+	// Erfasse Zeit für das Mappen der Sortierungsergebnisse
+	r.profiler.TimeOperation("MapSortResults", func() {
+		for result := range resultChan {
+			results[result.Index] = result
+		}
+	})
 
 	comparators := make([]func(id1, id2 string) int, 0, fields.Len())
 
-	for _, result := range results {
-		field := fields.GetSortField(result.Field)
-		orderMap := result.OrderMap
-		orderMapType := result.OrderMapType
-		if len(orderMap) == 0 {
-			r.log.Warn("Sort field not available for sorting", zap.String("field", field.Name))
-			continue
-		}
+	// Vergleichsfunktionen festlegen
+	r.profiler.TimeOperation("SetupComparators", func() {
+		for _, result := range results {
+			field := fields.GetSortField(result.Field)
+			orderMap := result.OrderMap
+			orderMapType := result.OrderMapType
+			if len(orderMap) == 0 {
+				r.log.Warn("Sort field not available for sorting", zap.String("field", field.Name))
+				continue
+			}
 
-		asc := field.Order == core.Asc
+			asc := field.Order == core.Asc
 
-		switch orderMapType {
-		case core.IntType:
-			comparators = append(comparators, func(id1, id2 string) int {
-				val1, val2 := orderMap[id1].(int), orderMap[id2].(int)
-				if val1 == val2 {
-					return 0
-				}
-				if asc {
-					if val1 < val2 {
-						return -1
+			switch orderMapType {
+			case core.IntType:
+				comparators = append(comparators, func(id1, id2 string) int {
+					val1, val2 := orderMap[id1].(int), orderMap[id2].(int)
+					if asc {
+						return compareIntsAsc(val1, val2)
 					}
-					return 1
-				}
-				if val1 > val2 {
-					return -1
-				}
-				return 1
-			})
-		case core.StringType:
-			comparators = append(comparators, func(id1, id2 string) int {
-				val1, val2 := orderMap[id1].(string), orderMap[id2].(string)
-				if val1 == val2 {
-					return 0
-				}
-				if asc {
-					if val1 < val2 {
-						return -1
+					return compareIntsDesc(val1, val2)
+				})
+			case core.StringType:
+				comparators = append(comparators, func(id1, id2 string) int {
+					val1, val2 := orderMap[id1].(string), orderMap[id2].(string)
+					if asc {
+						return compareStringsAsc(val1, val2)
 					}
-					return 1
-				}
-				if val1 > val2 {
-					return -1
-				}
-				return 1
-			})
-		}
-	}
-
-	if len(comparators) == 0 {
-		r.log.Warn("No valid sort fields provided, returning original order")
-		return r.ResultSet
-	}
-
-	sort.SliceStable(r.ResultSet, func(i, j int) bool {
-		id1, id2 := r.ResultSet[i], r.ResultSet[j]
-		for _, comparator := range comparators {
-			if result := comparator(id1, id2); result != 0 {
-				return result < 0
+					return compareStringsDesc(val1, val2)
+				})
 			}
 		}
-		return false
+	})
+
+	// Sortiere die ResultSet
+	r.profiler.TimeOperation("SortResults", func() {
+		sort.SliceStable(r.ResultSet, func(i, j int) bool {
+			id1, id2 := r.ResultSet[i], r.ResultSet[j]
+			for _, comparator := range comparators {
+				if result := comparator(id1, id2); result != 0 {
+					return result < 0
+				}
+			}
+			return false
+		})
 	})
 
 	return r.ResultSet
 }
 
 func (r *Executor) VisitOffset_clause(ctx *sqparser.Offset_clauseContext) any {
-	r.log.Debug("Visiting Offset Clause")
+	defer r.profiler.DeferTiming("VisitOffset_clause")()
 
 	offset, _ := strconv.Atoi(ctx.NUMBER().GetText()) // Convert the OFFSET number
 	if offset < len(r.ResultSet) {
@@ -483,7 +504,7 @@ func (r *Executor) VisitOffset_clause(ctx *sqparser.Offset_clauseContext) any {
 }
 
 func (r *Executor) VisitLimit_clause(ctx *sqparser.Limit_clauseContext) any {
-	r.log.Debug("Visiting Limit Clause")
+	defer r.profiler.DeferTiming("VisitLimit_clause")()
 
 	limit, _ := strconv.Atoi(ctx.NUMBER().GetText()) // Convert the LIMIT number
 	if limit < len(r.ResultSet) {
@@ -495,11 +516,10 @@ func (r *Executor) VisitLimit_clause(ctx *sqparser.Limit_clauseContext) any {
 }
 
 func (r *Executor) VisitRangeExpression(ctx *sqparser.RangeExpressionContext) any {
-	r.log.Debug("Visiting RangeExpression")
+	defer r.profiler.DeferTiming("VisitRangeExpression")()
 
-	// Extract the numbers from the context
-	startNumberStr := ctx.NUMBER(0).GetText() // first number
-	endNumberStr := ctx.NUMBER(1).GetText()   // Second number
+	startNumberStr := ctx.NUMBER(0).GetText()
+	endNumberStr := ctx.NUMBER(1).GetText()
 
 	startNumber, err := strconv.Atoi(startNumberStr)
 	if err != nil {
@@ -513,18 +533,58 @@ func (r *Executor) VisitRangeExpression(ctx *sqparser.RangeExpressionContext) an
 		return nil
 	}
 
-	rangeValues := []int{startNumber, endNumber}
-
 	r.log.Debug("Range expression", zap.Int("start", startNumber), zap.Int("end", endNumber))
 
-	return rangeValues
+	return []int{startNumber, endNumber}
 }
 
-// Auxiliary function for converting map[string]struct{} to []string
-func convertSetToSlice(set map[string]struct{}) []string {
+// Auxiliary function for converting map[string]struct{} to []string with profiling
+func (r *Executor) convertSetToSlice(set map[string]struct{}) []string {
+	defer r.profiler.DeferTiming("ConvertSetToSlice")()
+
 	result := make([]string, 0, len(set))
 	for item := range set {
 		result = append(result, item)
 	}
 	return result
+}
+
+// compareIntsAsc compares two integers in ascending order
+func compareIntsAsc(val1, val2 int) int {
+	if val1 < val2 {
+		return -1
+	} else if val1 > val2 {
+		return 1
+	}
+	return 0
+}
+
+// compareIntsDesc compares two integers in descending order
+func compareIntsDesc(val1, val2 int) int {
+	if val1 > val2 {
+		return -1
+	} else if val1 < val2 {
+		return 1
+	}
+	return 0
+}
+
+// compareStringsAsc compares two strings in ascending order
+func compareStringsAsc(val1, val2 string) int {
+	if val1 < val2 {
+		return -1
+	} else if val1 > val2 {
+		return 1
+	}
+	return 0
+}
+
+// compareStringsDesc compares two strings in descending order
+func compareStringsDesc(val1, val2 string) int {
+	if val1 > val2 {
+		return -1
+	} else if val1 < val2 {
+		return 1
+	}
+	return 0
 }

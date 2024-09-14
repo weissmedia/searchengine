@@ -55,11 +55,51 @@ func (p *Profiler) DeferTiming(operationName string) func() {
 	}
 }
 
-// TimeOperation for the normal function call with timing
+// TimeOperation for functions without a return value
 func (p *Profiler) TimeOperation(operationName string, fn func()) {
+	if !p.enabled {
+		fn()
+		return
+	}
+
 	start := time.Now()
-	fn()
-	p.recordTiming(operationName, start)
+	fn() // Execute the function
+	duration := time.Since(start).Seconds() * 1000
+
+	p.timings = append(p.timings, OperationTiming{
+		Operation: operationName,
+		TimeMs:    duration,
+	})
+
+	if p.logger != nil {
+		p.logger.Info("Operation timing recorded",
+			zap.String("operation", operationName),
+			zap.Float64("duration_ms", duration))
+	}
+}
+
+// TimeOperationWithReturn for functions that return a value
+func (p *Profiler) TimeOperationWithReturn(operationName string, fn func() interface{}) interface{} {
+	if !p.enabled {
+		return fn() // Execute the function and return the result
+	}
+
+	start := time.Now()
+	result := fn() // Execute the function
+	duration := time.Since(start).Seconds() * 1000
+
+	p.timings = append(p.timings, OperationTiming{
+		Operation: operationName,
+		TimeMs:    duration,
+	})
+
+	if p.logger != nil {
+		p.logger.Info("Operation timing recorded",
+			zap.String("operation", operationName),
+			zap.Float64("duration_ms", duration))
+	}
+
+	return result // Return the result from the passed function
 }
 
 // StartTiming for manual timing with start time passed in
@@ -70,6 +110,14 @@ func (p *Profiler) StartTiming(operationName string, start time.Time) {
 // GetTimings returns the recorded timings
 func (p *Profiler) GetTimings() []OperationTiming {
 	return p.timings
+}
+
+func (p *Profiler) GetTotalTime() float64 {
+	total := 0.0
+	for _, timing := range p.timings {
+		total += timing.TimeMs
+	}
+	return total
 }
 
 // Reset clears all recorded timings
