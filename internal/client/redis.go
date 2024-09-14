@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/redis/go-redis/v9"
-	"log"
+	"go.uber.org/zap"
 	"sort"
 	"strings"
 )
@@ -14,10 +14,11 @@ type RedisClient struct {
 	fieldMappings map[string]string
 	prefixFilter  string
 	prefixSorting string
+	logger        *zap.Logger
 }
 
 // NewRedisClient creates a new Redis client using the given host, port, and Redis DB.
-func NewRedisClient(host string, port, db int, prefixFilter, prefixSorting string) *RedisClient {
+func NewRedisClient(host string, port, db int, prefixFilter, prefixSorting string, logger *zap.Logger) *RedisClient {
 	address := fmt.Sprintf("%s:%d", host, port) // Construct the address from host and port
 
 	client := redis.NewClient(&redis.Options{
@@ -29,14 +30,17 @@ func NewRedisClient(host string, port, db int, prefixFilter, prefixSorting strin
 		client:        client,
 		prefixFilter:  prefixFilter,
 		prefixSorting: prefixSorting,
+		logger:        logger,
 	}
 }
 
+// SMembersMap retrieves all members of a Redis set and returns them as a map.
 func (c *RedisClient) SMembersMap(ctx context.Context, key string) (map[string]struct{}, error) {
 	res := c.client.SMembersMap(ctx, c.createFilterField(key))
 	return res.Result()
 }
 
+// Scan performs a scan operation over Redis keys that match the given pattern, filtering out specific values and supporting offset and limit for pagination.
 func (c *RedisClient) Scan(ctx context.Context, pattern string, patternIndex int, limit int, offset int, excludeValue string) ([]string, int, error) {
 	pattern = c.createFilterField(pattern)
 	var cursor uint64 = 0
@@ -50,21 +54,21 @@ func (c *RedisClient) Scan(ctx context.Context, pattern string, patternIndex int
 		key := iter.Val()
 		parts := strings.Split(key, ":")
 
-		// Überprüfen, ob der Wert nicht ausgeschlossen werden soll
+		// Check if the value should be excluded
 		if len(parts) >= patternIndex {
 			attr := parts[patternIndex-1]
 
-			// Nur ausschließen, wenn ein gültiger `excludeValue` gesetzt ist
+			// Exclude only if a valid `excludeValue` is set
 			if excludeValue == "" || attr != excludeValue {
 				fieldValues = append(fieldValues, attr)
 			}
 		} else {
-			log.Printf("Pattern index %d out of range for key: %s", patternIndex, key)
+			c.logger.Warn("Pattern index out of range for key", zap.Int("patternIndex", patternIndex), zap.String("key", key))
 		}
 	}
 
 	if err := iter.Err(); err != nil {
-		log.Printf("Error iterating over filter fields: %v", err)
+		c.logger.Error("Error iterating over filter fields", zap.Error(err))
 		return nil, 0, err
 	}
 
@@ -93,23 +97,25 @@ func (c *RedisClient) Scan(ctx context.Context, pattern string, patternIndex int
 	return limitedAttributes, totalCount, nil
 }
 
+// SUnionMap performs the Redis SUNION command on multiple sets and returns the union as a map.
 func (c *RedisClient) SUnionMap(ctx context.Context, keys ...string) (map[string]struct{}, error) {
-	// Erstelle eine Kopie von keys
+	// Create a copy of the keys
 	keysCopy := make([]string, len(keys))
 	copy(keysCopy, keys)
 
-	// Aktualisiere die Schlüssel in der Kopie
+	// Update the keys in the copy
 	for i, key := range keysCopy {
-		keysCopy[i] = c.createFilterField(key) // Filterfeld für jeden Schlüssel anwenden
+		keysCopy[i] = c.createFilterField(key) // Apply filter field for each key
 	}
 
-	// Führe den SUNION-Befehl mit der Kopie der Schlüssel aus
+	// Execute the SUNION command with the copied keys
 	result, err := c.client.SUnion(ctx, keysCopy...).Result()
 	if err != nil {
+		c.logger.Error("Error executing SUNION", zap.Error(err))
 		return nil, err
 	}
 
-	// Konvertiere das Ergebnis (eine Liste von Strings) in eine Map
+	// Convert the result (a list of strings) into a map
 	unionMap := make(map[string]struct{}, len(result))
 	for _, item := range result {
 		unionMap[item] = struct{}{}
@@ -118,6 +124,7 @@ func (c *RedisClient) SUnionMap(ctx context.Context, keys ...string) (map[string
 	return unionMap, nil
 }
 
+// ZRangeIndexMap retrieves and returns the sorted index map for multiple keys using the Redis ZRANGE command.
 func (c *RedisClient) ZRangeIndexMap(ctx context.Context, keys []string) ([]map[string]int, error) {
 	pipe := c.client.Pipeline()
 	sortCmds := make([]*redis.StringSliceCmd, len(keys))
@@ -127,6 +134,7 @@ func (c *RedisClient) ZRangeIndexMap(ctx context.Context, keys []string) ([]map[
 
 	_, err := pipe.Exec(ctx)
 	if err != nil {
+		c.logger.Error("Error executing ZRange pipeline", zap.Error(err))
 		return nil, err
 	}
 
@@ -135,8 +143,8 @@ func (c *RedisClient) ZRangeIndexMap(ctx context.Context, keys []string) ([]map[
 	for i, key := range keys {
 		members, err := sortCmds[i].Result()
 		if err != nil {
+			c.logger.Error("Error fetching sorted members", zap.String("key", key), zap.Error(err))
 			return nil, fmt.Errorf("error fetching sorted members for key %s: %w", key, err)
-
 		}
 		sortedIndexMap := make(map[string]int)
 		for index, value := range members {
@@ -149,6 +157,7 @@ func (c *RedisClient) ZRangeIndexMap(ctx context.Context, keys []string) ([]map[
 	return sortedIndexMaps, nil
 }
 
+// ZRangeMap retrieves the sorted sets for multiple keys using the Redis ZRANGE command and returns them as a map.
 func (c *RedisClient) ZRangeMap(ctx context.Context, keys []string) (map[string][]string, error) {
 	pipe := c.client.Pipeline()
 	sortCmds := make([]*redis.StringSliceCmd, len(keys))
@@ -159,6 +168,7 @@ func (c *RedisClient) ZRangeMap(ctx context.Context, keys []string) (map[string]
 
 	_, err := pipe.Exec(ctx)
 	if err != nil {
+		c.logger.Error("Error executing pipeline", zap.Error(err))
 		return nil, fmt.Errorf("error executing pipeline: %w", err)
 	}
 
@@ -167,6 +177,7 @@ func (c *RedisClient) ZRangeMap(ctx context.Context, keys []string) (map[string]
 	for i, key := range keys {
 		members, err := sortCmds[i].Result()
 		if err != nil {
+			c.logger.Error("Error fetching sorted members", zap.String("key", key), zap.Error(err))
 			return nil, fmt.Errorf("error fetching sorted members for key %s: %w", key, err)
 		}
 
@@ -176,16 +187,19 @@ func (c *RedisClient) ZRangeMap(ctx context.Context, keys []string) (map[string]
 	return sortedMaps, nil
 }
 
+// createFilterField creates the complete filter field by prefixing with the filter prefix.
 func (c *RedisClient) createFilterField(suffix string) string {
 	internalAttribute := c.getInternalField(suffix, nil)
 	return fmt.Sprintf("%s:%s", c.prefixFilter, internalAttribute)
 }
 
+// createSortField creates the complete sorting field by prefixing with the sorting prefix.
 func (c *RedisClient) createSortField(suffix string) string {
 	internalAttribute := c.getInternalField(suffix, nil)
 	return fmt.Sprintf("%s:%s", c.prefixSorting, internalAttribute)
 }
 
+// getInternalField maps the external field to an internal field based on provided mappings.
 func (c *RedisClient) getInternalField(externalField string, customMappings map[string]string) string {
 	fieldMappings := c.fieldMappings
 	if customMappings != nil {
@@ -194,7 +208,7 @@ func (c *RedisClient) getInternalField(externalField string, customMappings map[
 
 	internalField, ok := fieldMappings[externalField]
 	if !ok {
-		// If no mapping exists, use clientField directly
+		// If no mapping exists, use externalField directly
 		return externalField
 	}
 	return internalField

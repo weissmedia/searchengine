@@ -21,18 +21,18 @@ type Config struct {
 	SearchSchema     []core.SearchSchema `env:"-"`                                          // Schema defining the fields and their types
 	SearchSchemaFile string              `env:"SEARCH_SCHEMA_FILE,required"`                // File path for the search schema
 	NamespacePrefix  string              `env:"NAMESPACE_PREFIX" envDefault:"searchengine"` // Namespace prefix for organizing data
-	DataPrefix       string              `env:"REDIS_DATA_PREFIX" envDefault:"data"`        // Prefix for data storage
+	DataPrefix       string              `env:"REDIS_DATA_PREFIX" envDefault:"data"`        // Prefix for data JSON storage
 	FilterPrefix     string              `env:"REDIS_FILTER_PREFIX" envDefault:"filter"`    // Prefix for filter SET lists
-	SortingPrefix    string              `env:"REDIS_SORTING_PREFIX" envDefault:"sort"`     // Prefix for sorting ZSET lists
-	LogLevel         string              `env:"LOG_LEVEL" envDefault:"info"`                // Log level for the logger
+	SortingPrefix    string              `env:"REDIS_SORTING_PREFIX" envDefault:"sorting"`  // Prefix for sorting ZSET lists
+	LogLevel         string              `env:"SEARCHENGINE_LOG_LEVEL" envDefault:"info"`   // Log level for the logger
 }
 
 // NewConfig creates a new Config instance by loading environment variables and reading the search schema from a file.
 func NewConfig() (*Config, error) {
-	cfg := Config{}
+	cfg := &Config{}
 
 	// Parse environment variables and store them in the Config struct
-	if err := envs.Parse(&cfg); err != nil {
+	if err := envs.Parse(cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse environment variables: %w", err)
 	}
 
@@ -41,7 +41,7 @@ func NewConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to load search schema from file: %w", err)
 	}
 
-	return &cfg, nil
+	return cfg, nil
 }
 
 // loadSearchSchemaFromFile reads the schema from a file and converts it into a slice of SearchSchema structs.

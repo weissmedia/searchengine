@@ -6,6 +6,7 @@ require (
 	github.com/RediSearch/redisearch-go/v2 v2.1.1
 	github.com/antlr4-go/antlr/v4 v4.13.1
 	github.com/caarlos0/env/v11 v11.2.2
+	github.com/joho/godotenv v1.5.1
 	github.com/redis/go-redis/v9 v9.6.1
 	github.com/spf13/cobra v1.8.1
 	go.uber.org/zap v1.27.0

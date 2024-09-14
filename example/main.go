@@ -2,33 +2,37 @@ package main
 
 import (
 	"fmt"
+	"github.com/weissmedia/searchengine/internal/log"
 	"github.com/weissmedia/searchengine/pkg/searchengine"
+	"go.uber.org/zap"
 	"golang.org/x/net/context"
-	"log"
-	"os"
 )
 
 func main() {
-	os.Setenv("SEARCH_SCHEMA_FILE", "./example/searchschema.json")
-	os.Setenv("SEARCH_INDEX_NAME", "idx2")
-	os.Setenv("NAMESPACE_PREFIX", "opus.bdl.datapool")
-	os.Setenv("REDIS_FILTER_PREFIX", "opus.bdl.datapool:filter:")
-	os.Setenv("REDIS_SORTING_PREFIX", "opus.bdl.datapool:sorting:")
+	// Retrieve the globally initialized logger
+	logger := log.GetLogger()
 
-	// Load the configuration, including the schema from the file
+	// Load the configuration
 	cfg, err := searchengine.NewConfig()
 	if err != nil {
-		log.Fatalf("Error loading config: %v\n", err)
+		logger.Error("Error loading config", zap.Error(err))
+		return
 	}
 
-	// Use the configuration (e.g., connect to Redis, use schema)
-	fmt.Printf("Loaded Config: %+v\n", cfg)
-
-	engine := searchengine.NewEngine(cfg)
+	// Initialize the search engine with the configuration and logger
+	engine := searchengine.NewEngine(cfg, logger)
 	ctx := context.Background()
-	search, err := engine.Search(ctx, "inbox = 'AR_IB_AK_VL_KB_AHV'")
+
+	// Execute a search query
+	searchResult, err := engine.Search(ctx, "data_keyE=[0 100]")
 	if err != nil {
-		log.Fatalf("Error query: %v\n", err)
+		logger.Error("Error executing query", zap.Error(err))
+		return
 	}
-	fmt.Println(search)
+
+	// Output the search result
+	fmt.Println(searchResult)
+
+	// Ensure all log entries are written before exiting
+	defer log.SyncLogger()
 }

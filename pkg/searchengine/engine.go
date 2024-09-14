@@ -1,11 +1,13 @@
 package searchengine
 
 import (
-	cfg "github.com/weissmedia/searchengine/internal/config"
+	"github.com/weissmedia/searchengine/internal/backend"
 	"github.com/weissmedia/searchengine/internal/search"
+	"go.uber.org/zap"
 )
 
-// NewEngine stellt eine Instanz der Suchmaschine bereit
-func NewEngine(cfg *cfg.Config) *search.Engine {
-	return search.NewEngine(cfg)
+// NewEngine initializes and returns an instance of the search engine.
+// It takes the configuration and logger as parameters to configure and log search engine events.
+func NewEngine(cfg backend.Config, logger *zap.Logger) *search.Engine {
+	return search.NewEngine(cfg, logger)
 }

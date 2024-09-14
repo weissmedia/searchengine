@@ -1,6 +1,8 @@
 package core
 
-import "log"
+import (
+	"go.uber.org/zap"
+)
 
 type AttributeType int
 
@@ -34,11 +36,19 @@ type SortField struct {
 // SortFieldList contains a list of sorting fields
 type SortFieldList struct {
 	Fields []SortField
+	logger *zap.Logger // Store the logger here
+}
+
+// NewSortFieldList initializes a SortFieldList with a logger
+func NewSortFieldList(logger *zap.Logger) *SortFieldList {
+	return &SortFieldList{
+		logger: logger,
+	}
 }
 
 // AddSortField adds a new SortField to the SortFieldList
 func (s *SortFieldList) AddSortField(name string, order string) {
-	s.Fields = append(s.Fields, SortField{Name: name, Order: parseSortOrder(order)})
+	s.Fields = append(s.Fields, SortField{Name: name, Order: s.parseSortOrder(order)})
 }
 
 // SortFields returns a list of field names from the sorting fields
@@ -63,15 +73,15 @@ func (s *SortFieldList) Len() int {
 	return len(s.Fields)
 }
 
-// ParseSortOrder converts a string to a SortOrder type
-func parseSortOrder(order string) SortOrder {
+// parseSortOrder converts a string to a SortOrder type and uses the logger stored in the struct
+func (s *SortFieldList) parseSortOrder(order string) SortOrder {
 	switch order {
 	case "asc", "ASC":
 		return Asc
 	case "desc", "DESC":
 		return Desc
 	default:
-		log.Printf("unknown sort order: %s. set default order asc.", order)
+		s.logger.Warn("Unknown sort order, setting default to ASC", zap.String("order", order))
 		return Asc
 	}
 }

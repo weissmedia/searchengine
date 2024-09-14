@@ -5,8 +5,8 @@ import (
 	"github.com/weissmedia/searchengine/internal/client"
 	"github.com/weissmedia/searchengine/internal/core"
 	"github.com/weissmedia/searchengine/internal/sorting"
+	"go.uber.org/zap"
 	"golang.org/x/net/context"
-	"log"
 	"sync"
 )
 
@@ -14,17 +14,20 @@ type RedisBackend struct {
 	redisClient       *client.RedisClient
 	redisSearchClient *client.RedisSearchClient
 	sortingMapper     sorting.Mapper
+	logger            *zap.Logger
 }
 
-func NewRedisBackend(redisClient *client.RedisClient, redisSearchClient *client.RedisSearchClient, sortingMapper sorting.Mapper) *RedisBackend {
+// NewRedisBackend initializes a new RedisBackend instance with Redis clients, sorting mapper, and logger.
+func NewRedisBackend(redisClient *client.RedisClient, redisSearchClient *client.RedisSearchClient, sortingMapper sorting.Mapper, logger *zap.Logger) *RedisBackend {
 	return &RedisBackend{
 		redisClient:       redisClient,
 		redisSearchClient: redisSearchClient,
 		sortingMapper:     sortingMapper,
+		logger:            logger,
 	}
 }
 
-// GetMap returns results for either single or multiple values on a field
+// GetMap returns the results for a specific field based on a value, supporting both single string and string array values.
 func (b *RedisBackend) GetMap(ctx context.Context, field string, value interface{}) (map[string]struct{}, error) {
 	switch v := value.(type) {
 	case string:
@@ -36,7 +39,7 @@ func (b *RedisBackend) GetMap(ctx context.Context, field string, value interface
 	}
 }
 
-// GetMapExcluding retrieves all field values excluding the given one
+// GetMapExcluding retrieves all field values except the one specified.
 func (b *RedisBackend) GetMapExcluding(ctx context.Context, field string, valueExclude interface{}) (map[string]struct{}, error) {
 	fieldValues, _, err := b.GetFieldValuesExcluding(ctx, field, valueExclude)
 	if err != nil {
@@ -56,24 +59,22 @@ func (b *RedisBackend) GetMapExcluding(ctx context.Context, field string, valueE
 	return result, nil
 }
 
-// GetFieldValuesExcluding retrieves field values excluding the given one
+// GetFieldValuesExcluding retrieves field values excluding the specified value.
 func (b *RedisBackend) GetFieldValuesExcluding(ctx context.Context, field string, valueExclude interface{}) ([]string, int, error) {
-	// Generate a Redis search pattern to match field values
 	pattern := fmt.Sprintf("%s:*", field)
-	// Convert the value to exclude into a string
 	excludePattern := fmt.Sprintf("%v", valueExclude)
 
-	// Use the redisClient to scan the keys and exclude the given value
+	// Scans the keys while excluding the specified value
 	values, total, err := b.redisClient.Scan(ctx, pattern, 4, -1, 0, excludePattern)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error retrieving field values for %s excluding %v: %v", field, valueExclude, err)
 	}
 
-	log.Printf("Found %d field values for %s excluding %v", total, field, valueExclude)
+	b.logger.Info("Found field values", zap.Int("total", total), zap.String("field", field), zap.Any("excludedValue", valueExclude))
 	return values, total, nil
 }
 
-// SearchComparisonMap handles a comparison query and executes it using the appropriate operator
+// SearchComparisonMap constructs and executes a comparison query for the specified field using the provided operator.
 func (b *RedisBackend) SearchComparisonMap(field string, operator core.ComparisonOperator, value interface{}) (map[string]struct{}, error) {
 	query, err := b.generateComparisonQuery(field, operator, value)
 	if err != nil {
@@ -83,28 +84,28 @@ func (b *RedisBackend) SearchComparisonMap(field string, operator core.Compariso
 	return b.executeSearch(query)
 }
 
-// SearchRangeMap constructs and executes a range query in Redis
+// SearchRangeMap constructs and executes a range query for the specified field between a minimum and maximum value.
 func (b *RedisBackend) SearchRangeMap(field string, min, max interface{}) (map[string]struct{}, error) {
 	query := fmt.Sprintf("@%s:[%v %v]", field, min, max)
-	log.Printf("Generated range query: %s", query)
+	b.logger.Info("Generated range query", zap.String("query", query))
 	return b.executeSearch(query)
 }
 
-// SearchFuzzyMap constructs and executes a fuzzy search query in Redis
+// SearchFuzzyMap constructs and executes a fuzzy search query for the specified field.
 func (b *RedisBackend) SearchFuzzyMap(field, value string) (map[string]struct{}, error) {
 	query := fmt.Sprintf("@%s:%%%%%s%%%%", field, value)
-	log.Printf("Generated fuzzy search query: %s", query)
+	b.logger.Info("Generated fuzzy search query", zap.String("query", query))
 	return b.executeSearch(query)
 }
 
+// SearchWildcardMap constructs and executes a wildcard search query for the specified field.
 func (b *RedisBackend) SearchWildcardMap(field, value string) (map[string]struct{}, error) {
-	// Formatieren des Wildcard-Queries für RedisSearch
 	query := fmt.Sprintf("@%s:%s", field, value)
-	log.Printf("Executing wildcard search with query: %s", query)
+	b.logger.Info("Executing wildcard search", zap.String("query", query))
 	return b.executeSearch(query)
 }
 
-// GetSortedFieldValuesMap retrieves sorted field values using Redis zRange
+// GetSortedFieldValuesMap retrieves sorted field values using Redis ZRANGE and returns them via a channel.
 func (b *RedisBackend) GetSortedFieldValuesMap(ctx context.Context, fields []string) (<-chan core.SortResult, error) {
 	zRangeMap, err := b.redisClient.ZRangeMap(ctx, fields)
 	if err != nil {
@@ -115,7 +116,7 @@ func (b *RedisBackend) GetSortedFieldValuesMap(ctx context.Context, fields []str
 	var wg sync.WaitGroup
 	wg.Add(len(fields))
 
-	// Speichere sowohl den Feldnamen als auch den Index
+	// Launch goroutines to process each field
 	for i, field := range fields {
 		go func(index int, field string) {
 			defer wg.Done()
@@ -123,21 +124,21 @@ func (b *RedisBackend) GetSortedFieldValuesMap(ctx context.Context, fields []str
 			sortMembers := zRangeMap[field]
 			if len(sortMembers) == 0 {
 				resultChan <- core.SortResult{
-					Field: field, // Behalte den Feldnamen
+					Field: field,
 					Err:   fmt.Errorf("no sorted members for field %s", field),
-					Index: index, // Behalte den Index für die Reihenfolge
+					Index: index,
 				}
 				return
 			}
 
 			orderMap, attrType := b.sortingMapper.CreateSortingMap(sortMembers)
 			resultChan <- core.SortResult{
-				Index:        index, // Behalte den Index für die Reihenfolge
-				Field:        field, // Behalte den Feldnamen
+				Index:        index,
+				Field:        field,
 				OrderMap:     orderMap,
 				OrderMapType: attrType,
 			}
-		}(i, field) // Gib sowohl den Index als auch den Feldnamen in die Goroutine
+		}(i, field)
 	}
 
 	go func() {
@@ -148,7 +149,7 @@ func (b *RedisBackend) GetSortedFieldValuesMap(ctx context.Context, fields []str
 	return resultChan, nil
 }
 
-// Helper to retrieve map values for a single value
+// getMapValue is a helper method to retrieve values for a single field.
 func (b *RedisBackend) getMapValue(ctx context.Context, field string, value string) (map[string]struct{}, error) {
 	field = fmt.Sprintf("%s:%s", field, value)
 	result, err := b.redisClient.SMembersMap(ctx, field)
@@ -158,7 +159,7 @@ func (b *RedisBackend) getMapValue(ctx context.Context, field string, value stri
 	return result, nil
 }
 
-// Helper to retrieve map values for multiple values
+// getMapValues is a helper method to retrieve values for multiple fields.
 func (b *RedisBackend) getMapValues(ctx context.Context, field string, values []string) (map[string]struct{}, error) {
 	fields := make([]string, len(values))
 	for i, value := range values {
@@ -172,7 +173,7 @@ func (b *RedisBackend) getMapValues(ctx context.Context, field string, values []
 	return result, nil
 }
 
-// generateComparisonQuery constructs the Redis query string for comparison operators like >, >=, <, <=
+// generateComparisonQuery generates the Redis search query for comparison operations like >, >=, <, <=.
 func (b *RedisBackend) generateComparisonQuery(field string, operator core.ComparisonOperator, value interface{}) (string, error) {
 	var query string
 	switch operator {
@@ -187,18 +188,18 @@ func (b *RedisBackend) generateComparisonQuery(field string, operator core.Compa
 	default:
 		return "", fmt.Errorf("invalid comparison operator: %s", operator)
 	}
-	log.Printf("Generated comparison query: %s", query)
+	b.logger.Info("Generated comparison query", zap.String("query", query))
 	return query, nil
 }
 
-// executeSearch performs the actual Redis search and handles pagination if necessary
+// executeSearch performs a Redis search query and retrieves the results.
 func (b *RedisBackend) executeSearch(query string) (map[string]struct{}, error) {
 	searchResults, total, err := b.redisSearchClient.SearchIDMap(query, 0, 0)
 	if err != nil {
 		return nil, fmt.Errorf("error executing search: %v", err)
 	}
 
-	log.Printf("Initial search completed. Total Results: %v", total)
+	b.logger.Info("Initial search completed", zap.Int("totalResults", total))
 
 	if total > 0 {
 		searchResults, total, err = b.redisSearchClient.SearchIDMap(query, total, 0)
@@ -207,14 +208,15 @@ func (b *RedisBackend) executeSearch(query string) (map[string]struct{}, error) 
 		}
 	}
 
-	log.Printf("Final Search Results: %v", searchResults)
+	b.logger.Info("Final search results", zap.Any("results", searchResults))
 	return searchResults, nil
 }
 
+// UpdateSearchIndex updates the Redis search index by recreating it.
 func (b *RedisBackend) UpdateSearchIndex(indexName string) (bool, error) {
 	err := b.redisSearchClient.RecreateRedisearchIndex(indexName)
 	if err != nil {
-		log.Printf("Failed to recreate index: %v", err)
+		b.logger.Error("Failed to recreate index", zap.String("indexName", indexName), zap.Error(err))
 		return false, err
 	}
 	return true, nil

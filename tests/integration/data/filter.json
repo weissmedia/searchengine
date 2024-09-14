@@ -1,0 +1,20 @@
+{
+  "keyA:val1": ["x", "y", "z"],
+  "keyA:val2": ["a", "b", "c"],
+  "keyA:val3": ["d", "e", "f"],
+  "keyB:val1": ["g", "h", "i"],
+  "keyB:val2": ["j", "k", "l", "c"],
+  "keyB:val3": ["r", "p", "q"],
+  "keyC:val1": ["p", "q", "r"],
+  "keyC:val2": ["s", "c", "u", "t", "x"],
+  "keyC:val3": ["v", "w", "x"],
+  "keyD:val1": ["a", "b", "c"],
+  "keyD:val2": ["e", "x", "f", "u"],
+  "keyD:val3": ["g", "h", "i"],
+  "keyE:val1": ["j", "k", "l"],
+  "keyE:val2": ["m", "n", "o"],
+  "keyE:val3": ["p", "q", "r"],
+  "keyF:val1": ["s", "t", "u"],
+  "keyF:val2": ["v", "w", "x"],
+  "keyF:val3": ["y", "z", "a"]
+}

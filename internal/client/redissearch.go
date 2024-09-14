@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/RediSearch/redisearch-go/v2/redisearch"
 	"github.com/weissmedia/searchengine/internal/core"
-	"log"
+	"go.uber.org/zap"
 	"strings"
 )
 
@@ -12,10 +12,11 @@ type RedisSearchClient struct {
 	client       *redisearch.Client
 	searchSchema []core.SearchSchema
 	prefix       string
+	logger       *zap.Logger
 }
 
 // NewRedisSearchClient creates a new instance of RedisSearchClient
-func NewRedisSearchClient(redisClient *RedisClient, searchIndexName string, schema []core.SearchSchema, prefix string) *RedisSearchClient {
+func NewRedisSearchClient(redisClient *RedisClient, searchIndexName string, schema []core.SearchSchema, prefix string, logger *zap.Logger) *RedisSearchClient {
 	redis := redisClient.client.Options()
 	redisSearchClient := redisearch.NewClient(redis.Addr, searchIndexName)
 
@@ -23,12 +24,13 @@ func NewRedisSearchClient(redisClient *RedisClient, searchIndexName string, sche
 		client:       redisSearchClient,
 		searchSchema: schema,
 		prefix:       prefix,
+		logger:       logger,
 	}
 	r.setRuntimeSetup()
 
 	err := r.createSearchSchema()
 	if err != nil {
-		log.Println(err)
+		r.logger.Warn("Error creating search schema", zap.Error(err))
 	}
 
 	return r
@@ -37,9 +39,9 @@ func NewRedisSearchClient(redisClient *RedisClient, searchIndexName string, sche
 func (r *RedisSearchClient) setRuntimeSetup() {
 	setConfig, err := r.client.SetConfig("MAXSEARCHRESULTS", "-1")
 	if err != nil {
-		log.Println(err)
+		r.logger.Error("Error setting runtime configuration", zap.Error(err))
 	} else {
-		log.Println(setConfig)
+		r.logger.Info("Runtime configuration set", zap.String("config", setConfig))
 	}
 }
 
@@ -65,6 +67,7 @@ func (r *RedisSearchClient) setupSchema(schema []core.SearchSchema) error {
 	if err := r.client.CreateIndexWithIndexDefinition(sc, &definition); err != nil {
 		return fmt.Errorf("error creating index: %v", err)
 	}
+	r.logger.Info("Search schema created", zap.String("prefix", r.getPrefix()))
 	return nil
 }
 
@@ -93,8 +96,9 @@ func (r *RedisSearchClient) RecreateRedisearchIndex(indexName string) error {
 		if err := r.client.DropIndex(false); err != nil {
 			return fmt.Errorf("error dropping existing index: %v", err)
 		}
+		r.logger.Info("Existing index dropped", zap.String("index", indexName))
 	} else {
-		log.Printf("Index '%s' does not exist, skipping drop", indexName)
+		r.logger.Info("Index does not exist, skipping drop", zap.String("index", indexName))
 	}
 
 	// Recreate the schema and index
@@ -102,7 +106,7 @@ func (r *RedisSearchClient) RecreateRedisearchIndex(indexName string) error {
 		return fmt.Errorf("error recreating index: %v", err)
 	}
 
-	log.Printf("Index '%s' recreated successfully", indexName)
+	r.logger.Info("Index recreated successfully", zap.String("index", indexName))
 	return nil
 }
 
@@ -112,19 +116,20 @@ func (r *RedisSearchClient) SearchIDMap(query string, limit, offset int) (map[st
 	q.Limit(offset, limit)
 	docs, total, err := r.client.Search(q)
 	if err != nil {
+		r.logger.Error("Error during search", zap.Error(err))
 		return nil, 0, err
 	}
-	log.Printf("search results: %v %v %v", docs, total, err)
+	r.logger.Info("Search results", zap.Any("docs", docs), zap.Int("total", total))
 
 	// Prefix to be removed from result Ids
 	prefix := r.getPrefix()
 
 	resultSet := make(map[string]struct{}, total)
 	for _, result := range docs {
-		// Remove the prefix from the result Id
-		cleanedID := strings.TrimPrefix(result.Id, prefix)
+		// Remove the prefix from the result id
+		cleanedID := strings.TrimPrefix(result.Id, prefix+":")
 		resultSet[cleanedID] = struct{}{}
 	}
-	log.Printf("Search Results: %v\n", resultSet)
+	r.logger.Debug("Search Results", zap.Any("resultSet", resultSet))
 	return resultSet, total, nil
 }
