@@ -5,19 +5,22 @@ import (
 	"github.com/weissmedia/searchengine/generated/sqparser"
 	"github.com/weissmedia/searchengine/internal/backend"
 	"github.com/weissmedia/searchengine/internal/client"
+	"github.com/weissmedia/searchengine/internal/core"
+	"github.com/weissmedia/searchengine/internal/profiler"
 	"go.uber.org/zap"
 )
 
 type Engine struct {
-	Backend backend.SearchBackend
-	parser  *sqparser.SearchQueryParser // ANTLR Parser
-	log     *zap.Logger
+	Backend  backend.SearchBackend
+	parser   *sqparser.SearchQueryParser // ANTLR Parser
+	log      *zap.Logger
+	profiler *profiler.Profiler
 }
 
 // NewEngine creates a new search engine instance
 func NewEngine(cfg backend.Config, logger *zap.Logger) *Engine {
 	logger.Info("Creating new search engine instance...")
-
+	profiler := profiler.NewProfiler(true, logger)
 	redisClient := client.NewRedisClient(
 		cfg.GetRedisHost(),     // Redis host from config
 		cfg.GetRedisPort(),     // Redis port from config
@@ -38,13 +41,14 @@ func NewEngine(cfg backend.Config, logger *zap.Logger) *Engine {
 	searchBackend := backend.NewRedisBackend(redisClient, redisSearchClient, logger)
 
 	return &Engine{
-		Backend: searchBackend,
-		log:     logger,
+		Backend:  searchBackend,
+		log:      logger,
+		profiler: profiler,
 	}
 }
 
 // Search executes the search and returns the result set
-func (e *Engine) Search(ctx context.Context, query string) ([]string, error) {
+func (e *Engine) Search(ctx context.Context, query string) (*core.ExecutionResult, error) {
 	// Parse the query
 	tree, err := sqparser.Parse(query)
 	if err != nil {
@@ -53,7 +57,7 @@ func (e *Engine) Search(ctx context.Context, query string) ([]string, error) {
 	}
 
 	// Execute the query
-	exe := NewExecutor(ctx, e.Backend, e.log)
+	exe := NewExecutor(ctx, e.Backend, e.log, e.profiler)
 	result, err := exe.Execute(tree)
 	if err != nil {
 		e.log.Error("Error executing query", zap.String("query", query), zap.Error(err))

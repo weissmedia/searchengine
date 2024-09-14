@@ -31,7 +31,7 @@ func main() {
 	}
 
 	// Output the search result
-	fmt.Println(searchResult)
+	fmt.Println(searchResult.ResultSet)
 
 	// Ensure all log entries are written before exiting
 	defer log.SyncLogger()

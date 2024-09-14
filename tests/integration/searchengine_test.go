@@ -278,18 +278,18 @@ func runTest(t *testing.T, queryStr string, expected []string, checkOrder bool, 
 		return
 	}
 
-	t.Logf("Result from Visitor: %v", resultList)
+	t.Logf("Result from Visitor: %v", resultList.ResultSet)
 
 	// Falls die Reihenfolge wichtig ist, vergleiche direkt
 	if checkOrder {
-		if !reflect.DeepEqual(resultList, expected) {
+		if !reflect.DeepEqual(resultList.ResultSet, expected) {
 			t.Errorf("Test failed for query: %s\nExpected: %v\nGot: %v", queryStr, expected, resultList)
 		} else {
 			t.Logf("Test passed for query: %s", queryStr)
 		}
 	} else {
 		// Vergleiche das Ergebnis als Set (ungeordneter Vergleich)
-		if !equalAsSets(resultList, expected) {
+		if !equalAsSets(resultList.ResultSet, expected) {
 			t.Errorf("Test failed for query: %s\nExpected: %v\nGot: %v", queryStr, expected, resultList)
 		} else {
 			t.Logf("Test passed for query: %s", queryStr)

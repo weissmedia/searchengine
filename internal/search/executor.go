@@ -6,6 +6,7 @@ import (
 	"github.com/weissmedia/searchengine/generated/sqparser"
 	"github.com/weissmedia/searchengine/internal/backend"
 	"github.com/weissmedia/searchengine/internal/core"
+	"github.com/weissmedia/searchengine/internal/profiler"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 	"sort"
@@ -19,23 +20,30 @@ type Executor struct {
 	ResultSet []string
 	backend   backend.SearchBackend
 	log       *zap.Logger
+	profiler  *profiler.Profiler
 }
 
-func NewExecutor(ctx context.Context, backend backend.SearchBackend, logger *zap.Logger) *Executor {
+func NewExecutor(ctx context.Context, backend backend.SearchBackend, logger *zap.Logger, profiler *profiler.Profiler) *Executor {
 	logger.Info("Creating new search engine instance...")
 	return &Executor{
 		BaseSearchQueryVisitor: &sqparser.BaseSearchQueryVisitor{},
 		ctx:                    ctx,
 		backend:                backend,
 		log:                    logger,
+		profiler:               profiler,
 	}
 }
 
-// Execute executes the processing and converts the final ResultSet to []string
-func (r *Executor) Execute(tree antlr.ParseTree) ([]string, error) {
-	// Visit the parsed syntax tree (ParseTree) and get the ResultSet as a map[string]struct{}
+// Execute the query and return results along with timing information
+func (r *Executor) Execute(tree antlr.ParseTree) (*core.ExecutionResult, error) {
+	defer r.profiler.DeferTiming("Execute")()
+
 	resultSet := r.Visit(tree).([]string)
-	return resultSet, nil
+
+	return &core.ExecutionResult{
+		ResultSet: resultSet,
+		Timings:   r.profiler.GetTimings(),
+	}, nil
 }
 
 func (r *Executor) Visit(tree antlr.ParseTree) any {
@@ -285,7 +293,6 @@ func (r *Executor) VisitCondition(ctx *sqparser.ConditionContext) any {
 			endValue := rangeValues[1]
 
 			resultSet, err := r.backend.SearchRangeMap(identifier, startValue, endValue)
-			fmt.Println("ZZZZZZZZ", resultSet)
 			if err != nil {
 				r.log.Error("Error searching range", zap.String("identifier", identifier), zap.Error(err))
 				return nil
