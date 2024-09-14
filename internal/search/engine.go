@@ -5,7 +5,6 @@ import (
 	"github.com/weissmedia/searchengine/generated/sqparser"
 	"github.com/weissmedia/searchengine/internal/backend"
 	"github.com/weissmedia/searchengine/internal/client"
-	"github.com/weissmedia/searchengine/internal/sorting"
 	"go.uber.org/zap"
 )
 
@@ -19,7 +18,6 @@ type Engine struct {
 func NewEngine(cfg backend.Config, logger *zap.Logger) *Engine {
 	logger.Info("Creating new search engine instance...")
 
-	sortingMapper := sorting.NewMapper()
 	redisClient := client.NewRedisClient(
 		cfg.GetRedisHost(),     // Redis host from config
 		cfg.GetRedisPort(),     // Redis port from config
@@ -37,7 +35,7 @@ func NewEngine(cfg backend.Config, logger *zap.Logger) *Engine {
 		logger,
 	)
 
-	searchBackend := backend.NewRedisBackend(redisClient, redisSearchClient, sortingMapper, logger)
+	searchBackend := backend.NewRedisBackend(redisClient, redisSearchClient, logger)
 
 	return &Engine{
 		Backend: searchBackend,

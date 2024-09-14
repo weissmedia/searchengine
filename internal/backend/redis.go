@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/weissmedia/searchengine/internal/client"
 	"github.com/weissmedia/searchengine/internal/core"
-	"github.com/weissmedia/searchengine/internal/sorting"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 	"sync"
@@ -13,16 +12,14 @@ import (
 type RedisBackend struct {
 	redisClient       *client.RedisClient
 	redisSearchClient *client.RedisSearchClient
-	sortingMapper     sorting.Mapper
 	logger            *zap.Logger
 }
 
 // NewRedisBackend initializes a new RedisBackend instance with Redis clients, sorting mapper, and logger.
-func NewRedisBackend(redisClient *client.RedisClient, redisSearchClient *client.RedisSearchClient, sortingMapper sorting.Mapper, logger *zap.Logger) *RedisBackend {
+func NewRedisBackend(redisClient *client.RedisClient, redisSearchClient *client.RedisSearchClient, logger *zap.Logger) *RedisBackend {
 	return &RedisBackend{
 		redisClient:       redisClient,
 		redisSearchClient: redisSearchClient,
-		sortingMapper:     sortingMapper,
 		logger:            logger,
 	}
 }
@@ -106,7 +103,8 @@ func (b *RedisBackend) SearchWildcardMap(field, value string) (map[string]struct
 }
 
 // GetSortedFieldValuesMap retrieves sorted field values using Redis ZRANGE and returns them via a channel.
-func (b *RedisBackend) GetSortedFieldValuesMap(ctx context.Context, fields []string) (<-chan core.SortResult, error) {
+func (b *RedisBackend) GetSortedFieldValuesMap(ctx context.Context, sortFields *core.SortFieldList) (<-chan core.SortResult, error) {
+	fields := sortFields.SortFields()
 	zRangeMap, err := b.redisClient.ZRangeMap(ctx, fields)
 	if err != nil {
 		return nil, err
@@ -131,7 +129,7 @@ func (b *RedisBackend) GetSortedFieldValuesMap(ctx context.Context, fields []str
 				return
 			}
 
-			orderMap, attrType := b.sortingMapper.CreateSortingMap(sortMembers)
+			orderMap, attrType := sortFields.BuildSortMap(sortMembers)
 			resultChan <- core.SortResult{
 				Index:        index,
 				Field:        field,

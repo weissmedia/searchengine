@@ -28,7 +28,7 @@ type SearchBackend interface {
 	SearchWildcardMap(field, value string) (map[string]struct{}, error)
 
 	// GetSortedFieldValuesMap retrieves sorted field values using Redis zRange.
-	GetSortedFieldValuesMap(ctx context.Context, fields []string) (<-chan core.SortResult, error)
+	GetSortedFieldValuesMap(ctx context.Context, sortFields *core.SortFieldList) (<-chan core.SortResult, error)
 
 	// UpdateSearchIndex updates the Redisearch index with the provided schema.
 	UpdateSearchIndex(indexName string) (bool, error)

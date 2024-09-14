@@ -383,7 +383,7 @@ func (r *Executor) VisitSort_clause(ctx *sqparser.Sort_clauseContext) any {
 		fields.AddSortField(identifierCtx.GetText(), order)
 	}
 
-	resultChan, err := r.backend.GetSortedFieldValuesMap(r.ctx, fields.SortFields())
+	resultChan, err := r.backend.GetSortedFieldValuesMap(r.ctx, fields)
 	if err != nil {
 		r.log.Error("Error getting sorted field values", zap.Error(err))
 	}
