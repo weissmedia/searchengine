@@ -55,11 +55,11 @@ func main() {
 		return
 	}
 
-	marshal, err := searchResult.Marshal()
+	json, err := searchResult.ToJSON()
 	if err != nil {
 		return
 	}
-	fmt.Println("Marshal Results:", marshal)
+	fmt.Println("JSON Results:", json)
 	// Ausgabe der Gesamtzeit
 	fmt.Printf("Total Time: %.3f ms\n", searchResult.TotalExecutionTime)
 

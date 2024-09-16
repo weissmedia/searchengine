@@ -15,8 +15,8 @@ type ExecutionResult struct {
 	Log                []string                   `json:"Log"`
 }
 
-// Marshal converts ExecutionResult to JSON and returns it as a string.
-func (e *ExecutionResult) Marshal() (string, error) {
+// ToJSON converts ExecutionResult to JSON and returns it as a string.
+func (e *ExecutionResult) ToJSON() (string, error) {
 	// Create a buffer to hold the output
 	var buffer bytes.Buffer
 
