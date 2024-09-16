@@ -20,7 +20,7 @@ type Engine struct {
 // NewEngine creates a new search engine instance
 func NewEngine(cfg backend.Config, logger *zap.Logger) *Engine {
 	logger.Info("Creating new search engine instance...")
-	profiler := profiler.NewProfiler(true, logger)
+	prof := profiler.NewProfiler(cfg.GetProfilerEnabled(), logger)
 	redisClient := client.NewRedisClient(
 		cfg.GetRedisHost(),     // Redis host from config
 		cfg.GetRedisPort(),     // Redis port from config
@@ -43,7 +43,7 @@ func NewEngine(cfg backend.Config, logger *zap.Logger) *Engine {
 	return &Engine{
 		Backend:  searchBackend,
 		log:      logger,
-		profiler: profiler,
+		profiler: prof,
 	}
 }
 

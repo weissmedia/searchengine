@@ -16,11 +16,12 @@ import (
 
 type Executor struct {
 	*sqparser.BaseSearchQueryVisitor
-	ctx       context.Context
-	ResultSet []string
-	backend   backend.SearchBackend
-	log       *zap.Logger
-	profiler  *profiler.Profiler
+	ctx           context.Context
+	ResultSet     []string
+	backend       backend.SearchBackend
+	log           *zap.Logger
+	profiler      *profiler.Profiler
+	executionLogs []string
 }
 
 func NewExecutor(ctx context.Context, backend backend.SearchBackend, logger *zap.Logger, profiler *profiler.Profiler) *Executor {
@@ -36,14 +37,19 @@ func NewExecutor(ctx context.Context, backend backend.SearchBackend, logger *zap
 
 // Execute the query and return results along with timing information
 func (r *Executor) Execute(tree antlr.ParseTree) (*core.ExecutionResult, error) {
-	defer r.profiler.DeferTiming("Execute")()
+	// Clear the executionLogs at the start of each execution
+	r.executionLogs = []string{}
 
+	// Visit the tree and get the result set
 	resultSet := r.Visit(tree).([]string)
 
+	// Return the result along with logs and timings
 	return &core.ExecutionResult{
-		ResultSet: resultSet,
-		Timings:   r.profiler.GetTimings(),
-		TotalTime: r.profiler.GetTotalTime(),
+		ResultSet:          resultSet,
+		ResultCount:        len(resultSet),
+		Timings:            r.profiler.GetTimings(),
+		TotalExecutionTime: r.profiler.GetTotalExecutionTime(),
+		Log:                r.executionLogs,
 	}, nil
 }
 
@@ -134,29 +140,41 @@ func (r *Executor) VisitAndExpression(ctx *sqparser.AndExpressionContext) any {
 	defer r.profiler.DeferTiming("VisitAndExpression")()
 
 	var finalResult map[string]struct{}
+	var expressions []string
 
 	for i := 0; i < len(ctx.AllComparisonExpression()); i++ {
-		set := r.Visit(ctx.ComparisonExpression(i))
-		r.log.Debug("Set for expression", zap.Int("index", i), zap.Any("set", set))
-		resultSet, ok := set.(map[string]struct{})
-		if !ok || len(resultSet) == 0 {
-			r.log.Warn("Empty set for expression", zap.String("expression", ctx.ComparisonExpression(i).GetText()))
-			return map[string]struct{}{}
-		}
+		// Measure the time for each condition
+		expression := ctx.ComparisonExpression(i).GetText()
+		r.profiler.TimeOperation(fmt.Sprintf("AND Condition: %s", expression), func() {
+			set := r.Visit(ctx.ComparisonExpression(i))
+			resultSet, ok := set.(map[string]struct{})
+			if !ok || len(resultSet) == 0 {
+				r.log.Warn("Empty set for expression", zap.String("expression", expression))
+				r.executionLogs = append(r.executionLogs, fmt.Sprintf("Empty set for expression: %s", expression))
+				finalResult = map[string]struct{}{}
+				return
+			}
 
-		if finalResult == nil {
-			finalResult = resultSet
-		} else {
-			for elem := range finalResult {
-				if _, found := resultSet[elem]; !found {
-					delete(finalResult, elem)
+			if finalResult == nil {
+				finalResult = resultSet
+			} else {
+				for elem := range finalResult {
+					if _, found := resultSet[elem]; !found {
+						delete(finalResult, elem)
+					}
 				}
 			}
-			r.log.Debug("Updated final result after intersection", zap.Any("finalResult", finalResult))
-		}
+		})
+
+		// Capture the expression for the output
+		expressions = append(expressions, expression)
 	}
 
-	r.log.Debug("Final AND intersection result", zap.Any("finalResult", finalResult))
+	// Output of the AND conditions
+	r.log.Debug("AND Expression",
+		zap.String("expression", strings.Join(expressions, " AND")),
+	)
+
 	return finalResult
 }
 
@@ -164,22 +182,28 @@ func (r *Executor) VisitOrExpression(ctx *sqparser.OrExpressionContext) any {
 	defer r.profiler.DeferTiming("VisitOrExpression")()
 
 	finalResult := make(map[string]struct{})
+	var expressions []string
 
 	for i := 0; i < len(ctx.AllAndExpression()); i++ {
-		set := r.Visit(ctx.AndExpression(i))
-
-		resultSet, ok := set.(map[string]struct{})
-		if ok && len(resultSet) > 0 {
-			for elem := range resultSet {
-				finalResult[elem] = struct{}{}
+		expression := ctx.AndExpression(i).GetText()
+		r.profiler.TimeOperation(fmt.Sprintf("OR Condition: %s", expression), func() {
+			set := r.Visit(ctx.AndExpression(i))
+			resultSet, ok := set.(map[string]struct{})
+			if ok && len(resultSet) > 0 {
+				for elem := range resultSet {
+					finalResult[elem] = struct{}{}
+				}
 			}
-			r.log.Debug("Added non-empty set for OR condition", zap.Any("resultSet", resultSet))
-		} else {
-			r.log.Warn("Skipping empty set for OR condition", zap.Int("index", i))
-		}
+		})
+
+		expressions = append(expressions, expression)
 	}
 
-	r.log.Debug("Final OR union result", zap.Any("finalResult", finalResult))
+	// Output of the OR conditions
+	r.log.Debug("OR Expression",
+		zap.String("expression", strings.Join(expressions, " OR")),
+	)
+
 	return finalResult
 }
 
@@ -250,7 +274,7 @@ func (r *Executor) VisitCondition(ctx *sqparser.ConditionContext) any {
 			return nil
 		}
 
-		// Profiling für Redis IN query
+		// Profiling for Redis IN query
 		result := r.profiler.TimeOperationWithReturn("GetMap for IN query", func() interface{} {
 			result, err := r.backend.GetMap(r.ctx, identifier, inValues)
 			if err != nil {
@@ -264,7 +288,7 @@ func (r *Executor) VisitCondition(ctx *sqparser.ConditionContext) any {
 		return result
 	}
 
-	// Profiling für Fuzzy query
+	// Profiling for Fuzzy query
 	if ctx.FUZZY() != nil {
 		value := strings.Trim(ctx.QUOTED_LITERAL().GetText(), "'")
 
@@ -273,7 +297,7 @@ func (r *Executor) VisitCondition(ctx *sqparser.ConditionContext) any {
 			return nil
 		}
 
-		// Profiling für Redis Fuzzy-Abfrage
+		// Profiling for a Fuzzy query
 		resultSet := r.profiler.TimeOperationWithReturn("SearchFuzzyMap", func() interface{} {
 			resultSet, err := r.backend.SearchFuzzyMap(identifier, value)
 			if err != nil {
@@ -405,7 +429,7 @@ func (r *Executor) VisitSort_clause(ctx *sqparser.Sort_clauseContext) any {
 
 	fields := core.NewSortFieldList(r.log)
 
-	// Profiling für das Hinzufügen von Sortierfeldern
+	// Profiling for adding sort fields
 	r.profiler.TimeOperation("AddSortFields", func() {
 		for i, identifierCtx := range ctx.AllIDENTIFIER() {
 			order := "ASC"
@@ -418,7 +442,7 @@ func (r *Executor) VisitSort_clause(ctx *sqparser.Sort_clauseContext) any {
 		}
 	})
 
-	// Erfasse Zeit für die Redis-Abfrage der Sortierungswerte
+	// Time taken to query the sorting values from Redis
 	resultChan := r.profiler.TimeOperationWithReturn("GetSortedFieldValuesMap", func() interface{} {
 		resultChan, err := r.backend.GetSortedFieldValuesMap(r.ctx, fields)
 		if err != nil {
@@ -430,7 +454,7 @@ func (r *Executor) VisitSort_clause(ctx *sqparser.Sort_clauseContext) any {
 
 	results := make([]core.SortResult, fields.Len())
 
-	// Erfasse Zeit für das Mappen der Sortierungsergebnisse
+	// Record time for mapping the sorting results
 	r.profiler.TimeOperation("MapSortResults", func() {
 		for result := range resultChan {
 			results[result.Index] = result
@@ -439,7 +463,7 @@ func (r *Executor) VisitSort_clause(ctx *sqparser.Sort_clauseContext) any {
 
 	comparators := make([]func(id1, id2 string) int, 0, fields.Len())
 
-	// Vergleichsfunktionen festlegen
+	// define comparison functions
 	r.profiler.TimeOperation("SetupComparators", func() {
 		for _, result := range results {
 			field := fields.GetSortField(result.Field)
@@ -473,7 +497,7 @@ func (r *Executor) VisitSort_clause(ctx *sqparser.Sort_clauseContext) any {
 		}
 	})
 
-	// Sortiere die ResultSet
+	// Sort the ResultSet
 	r.profiler.TimeOperation("SortResults", func() {
 		sort.SliceStable(r.ResultSet, func(i, j int) bool {
 			id1, id2 := r.ResultSet[i], r.ResultSet[j]
@@ -516,8 +540,9 @@ func (r *Executor) VisitLimit_clause(ctx *sqparser.Limit_clauseContext) any {
 }
 
 func (r *Executor) VisitRangeExpression(ctx *sqparser.RangeExpressionContext) any {
-	defer r.profiler.DeferTiming("VisitRangeExpression")()
+	defer r.profiler.DeferTiming(fmt.Sprintf("VisitRangeExpression: %s", ctx.GetText()))()
 
+	// Extract start and end values from the range condition
 	startNumberStr := ctx.NUMBER(0).GetText()
 	endNumberStr := ctx.NUMBER(1).GetText()
 
@@ -533,7 +558,12 @@ func (r *Executor) VisitRangeExpression(ctx *sqparser.RangeExpressionContext) an
 		return nil
 	}
 
-	r.log.Debug("Range expression", zap.Int("start", startNumber), zap.Int("end", endNumber))
+	// Log and output the range
+	r.log.Debug("Range Expression",
+		zap.String("expression", ctx.GetText()), // Output of the expression as a string
+		zap.Int("start", startNumber),           // Start value as an integer
+		zap.Int("end", endNumber),               // End value as an intege
+	)
 
 	return []int{startNumber, endNumber}
 }

@@ -6,9 +6,11 @@ import (
 	"github.com/weissmedia/searchengine/pkg/searchengine"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
+	"time"
 )
 
 func main() {
+	start := time.Now()
 	// Retrieve the globally initialized logger
 	logger := log.GetLogger()
 
@@ -23,7 +25,28 @@ func main() {
 	engine := searchengine.NewEngine(cfg, logger)
 	ctx := context.Background()
 
-	query := "data_keyE=[0 100]"
+	//query := "((keyA = 'val1' OR keyB = 'val3') AND (keyC = 'val2' OR keyD = 'val2')) AND data_keyE=[0 100] AND keyC='val2'"
+	query := `
+	(owner_id = 'ZHsit105' OR case_leader_id = 'ZHsit105') AND
+	case_state_text IN (
+		'generated',
+		'businesscasevalidation',
+		'validated',
+		'inprogress',
+		'partnerexamination',
+		'qualityassurance',
+		'upstreamprocess'
+	) AND
+	inbox IN (
+		'AR_IB_VB_IK_KORR',
+		'AR_IB_VB_IK_BGS',
+		'AR_IB_VB_IK_LD',
+		'AR_IB_VB_IK_TEAM',
+		'AR_BG_AK_SB_HE',
+		'AR_BG_AK_SB_IK',
+		'AR_BG_AK_SB_RE'
+	) AND
+	cases_stat_partner_protection_code <= 9`
 	fmt.Println("Query:", query)
 	// Execute a search query
 	searchResult, err := engine.Search(ctx, query)
@@ -32,18 +55,16 @@ func main() {
 		return
 	}
 
-	// Output the search result
-	fmt.Println("Search Results:", searchResult.ResultSet)
-
-	// Schöner formatierte Ausgabe der Timings
-	fmt.Println("Operation Timings:")
-	for _, timing := range searchResult.Timings {
-		fmt.Printf("  Operation: %s | Time: %.3f ms\n", timing.Operation, timing.TimeMs)
+	marshal, err := searchResult.Marshal()
+	if err != nil {
+		return
 	}
-
+	fmt.Println("Marshal Results:", marshal)
 	// Ausgabe der Gesamtzeit
-	fmt.Printf("Total Time: %.3f ms\n", searchResult.TotalTime)
+	fmt.Printf("Total Time: %.3f ms\n", searchResult.TotalExecutionTime)
 
 	// Ensure all log entries are written before exiting
 	log.SyncLogger()
+	duration := time.Since(start).Seconds() * 1000
+	fmt.Println("Duration:", duration)
 }

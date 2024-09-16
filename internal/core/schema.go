@@ -31,13 +31,24 @@ func ConvertInputToSchema(input InputSchema) ([]SearchSchema, error) {
 	var schema []SearchSchema
 	for index, fields := range input {
 		for fieldName, fieldType := range fields {
-			schemaType, err := mapFieldType(fieldType)
+			// Split fieldType to check for a custom name (format: "type:name")
+			parts := strings.Split(fieldType, ":")
+			schemaType, err := mapFieldType(parts[0])
 			if err != nil {
 				return nil, fmt.Errorf("error processing field '%s' in '%s': %v", fieldName, index, err)
 			}
+
+			// If a name is provided, use it; otherwise, generate a default name
+			var name string
+			if len(parts) > 1 && parts[1] != "" {
+				name = parts[1]
+			} else {
+				name = fmt.Sprintf("%s_%s", index, fieldName)
+			}
+
 			schema = append(schema, SearchSchema{
 				Path:          fmt.Sprintf("$.%s.%s", index, fieldName),
-				Name:          fmt.Sprintf("%s_%s", index, fieldName), // Prefix with the index for RedisSearch
+				Name:          name,
 				Type:          schemaType,
 				SearchOptions: determineSearchOptions(schemaType),
 			})

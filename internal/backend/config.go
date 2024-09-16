@@ -54,4 +54,8 @@ type Config interface {
 	// GetSortingPrefix returns the prefix used for storing sorted ZSET lists in Redis.
 	// This prefix is used to manage sorted sets that help with sorting and ranking operations.
 	GetSortingPrefix() string
+
+	// GetProfilerEnabled returns whether the profiler is enabled.
+	// When true, performance metrics are collected during query execution.
+	GetProfilerEnabled() bool
 }

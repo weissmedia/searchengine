@@ -12,7 +12,7 @@ import (
 type RedisBackend struct {
 	redisClient       *client.RedisClient
 	redisSearchClient *client.RedisSearchClient
-	logger            *zap.Logger
+	log               *zap.Logger
 }
 
 // NewRedisBackend initializes a new RedisBackend instance with Redis clients, sorting mapper, and logger.
@@ -20,7 +20,7 @@ func NewRedisBackend(redisClient *client.RedisClient, redisSearchClient *client.
 	return &RedisBackend{
 		redisClient:       redisClient,
 		redisSearchClient: redisSearchClient,
-		logger:            logger,
+		log:               logger,
 	}
 }
 
@@ -67,7 +67,7 @@ func (b *RedisBackend) GetFieldValuesExcluding(ctx context.Context, field string
 		return nil, 0, fmt.Errorf("error retrieving field values for %s excluding %v: %v", field, valueExclude, err)
 	}
 
-	b.logger.Info("Found field values", zap.Int("total", total), zap.String("field", field), zap.Any("excludedValue", valueExclude))
+	b.log.Info("Found field values", zap.Int("total", total), zap.String("field", field), zap.Any("excludedValue", valueExclude))
 	return values, total, nil
 }
 
@@ -84,21 +84,21 @@ func (b *RedisBackend) SearchComparisonMap(field string, operator core.Compariso
 // SearchRangeMap constructs and executes a range query for the specified field between a minimum and maximum value.
 func (b *RedisBackend) SearchRangeMap(field string, min, max interface{}) (map[string]struct{}, error) {
 	query := fmt.Sprintf("@%s:[%v %v]", field, min, max)
-	b.logger.Info("Generated range query", zap.String("query", query))
+	b.log.Info("Generated range query", zap.String("query", query))
 	return b.executeSearch(query)
 }
 
 // SearchFuzzyMap constructs and executes a fuzzy search query for the specified field.
 func (b *RedisBackend) SearchFuzzyMap(field, value string) (map[string]struct{}, error) {
 	query := fmt.Sprintf("@%s:%%%%%s%%%%", field, value)
-	b.logger.Info("Generated fuzzy search query", zap.String("query", query))
+	b.log.Info("Generated fuzzy search query", zap.String("query", query))
 	return b.executeSearch(query)
 }
 
 // SearchWildcardMap constructs and executes a wildcard search query for the specified field.
 func (b *RedisBackend) SearchWildcardMap(field, value string) (map[string]struct{}, error) {
 	query := fmt.Sprintf("@%s:%s", field, value)
-	b.logger.Info("Executing wildcard search", zap.String("query", query))
+	b.log.Info("Executing wildcard search", zap.String("query", query))
 	return b.executeSearch(query)
 }
 
@@ -186,7 +186,7 @@ func (b *RedisBackend) generateComparisonQuery(field string, operator core.Compa
 	default:
 		return "", fmt.Errorf("invalid comparison operator: %s", operator)
 	}
-	b.logger.Info("Generated comparison query", zap.String("query", query))
+	b.log.Info("Generated comparison query", zap.String("query", query))
 	return query, nil
 }
 
@@ -197,7 +197,7 @@ func (b *RedisBackend) executeSearch(query string) (map[string]struct{}, error) 
 		return nil, fmt.Errorf("error executing search: %v", err)
 	}
 
-	b.logger.Info("Initial search completed", zap.Int("totalResults", total))
+	b.log.Info("Initial search completed", zap.Int("totalResults", total))
 
 	if total > 0 {
 		searchResults, total, err = b.redisSearchClient.SearchIDMap(query, total, 0)
@@ -206,7 +206,7 @@ func (b *RedisBackend) executeSearch(query string) (map[string]struct{}, error) 
 		}
 	}
 
-	b.logger.Info("Final search results", zap.Any("results", searchResults))
+	b.log.Info("Final search results", zap.Any("results", searchResults))
 	return searchResults, nil
 }
 
@@ -214,7 +214,7 @@ func (b *RedisBackend) executeSearch(query string) (map[string]struct{}, error) 
 func (b *RedisBackend) UpdateSearchIndex(indexName string) (bool, error) {
 	err := b.redisSearchClient.RecreateRedisearchIndex(indexName)
 	if err != nil {
-		b.logger.Error("Failed to recreate index", zap.String("indexName", indexName), zap.Error(err))
+		b.log.Error("Failed to recreate index", zap.String("indexName", indexName), zap.Error(err))
 		return false, err
 	}
 	return true, nil

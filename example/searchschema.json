@@ -1,13 +1,13 @@
 {
   "cases_dyna": {
-    "case_state_text": "text",
-    "case_type_name": "text",
-    "inbox": "text",
-    "owner_id": "text",
-    "org_unit": "text"
+    "case_state_text": "text:case_state_text",
+    "case_type_name": "text:case_type_name",
+    "inbox": "text:inbox",
+    "owner_id": "text:owner_id",
+    "org_unit": "text:org_unit"
   },
   "cases_stat": {
-    "partner_protection_code": "numeric"
+    "partner_protection_code": "numeric:partner_protection_code"
   },
   "partners_member": {
     "firstname_orgname_addon": "text",

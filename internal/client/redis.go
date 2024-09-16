@@ -14,7 +14,7 @@ type RedisClient struct {
 	fieldMappings map[string]string
 	prefixFilter  string
 	prefixSorting string
-	logger        *zap.Logger
+	log           *zap.Logger
 }
 
 // NewRedisClient creates a new Redis client using the given host, port, and Redis DB.
@@ -30,7 +30,7 @@ func NewRedisClient(host string, port, db int, prefixFilter, prefixSorting strin
 		client:        client,
 		prefixFilter:  prefixFilter,
 		prefixSorting: prefixSorting,
-		logger:        logger,
+		log:           logger,
 	}
 }
 
@@ -63,12 +63,12 @@ func (c *RedisClient) Scan(ctx context.Context, pattern string, patternIndex int
 				fieldValues = append(fieldValues, attr)
 			}
 		} else {
-			c.logger.Warn("Pattern index out of range for key", zap.Int("patternIndex", patternIndex), zap.String("key", key))
+			c.log.Warn("Pattern index out of range for key", zap.Int("patternIndex", patternIndex), zap.String("key", key))
 		}
 	}
 
 	if err := iter.Err(); err != nil {
-		c.logger.Error("Error iterating over filter fields", zap.Error(err))
+		c.log.Error("Error iterating over filter fields", zap.Error(err))
 		return nil, 0, err
 	}
 
@@ -111,7 +111,7 @@ func (c *RedisClient) SUnionMap(ctx context.Context, keys ...string) (map[string
 	// Execute the SUNION command with the copied keys
 	result, err := c.client.SUnion(ctx, keysCopy...).Result()
 	if err != nil {
-		c.logger.Error("Error executing SUNION", zap.Error(err))
+		c.log.Error("Error executing SUNION", zap.Error(err))
 		return nil, err
 	}
 
@@ -134,7 +134,7 @@ func (c *RedisClient) ZRangeIndexMap(ctx context.Context, keys []string) ([]map[
 
 	_, err := pipe.Exec(ctx)
 	if err != nil {
-		c.logger.Error("Error executing ZRange pipeline", zap.Error(err))
+		c.log.Error("Error executing ZRange pipeline", zap.Error(err))
 		return nil, err
 	}
 
@@ -143,7 +143,7 @@ func (c *RedisClient) ZRangeIndexMap(ctx context.Context, keys []string) ([]map[
 	for i, key := range keys {
 		members, err := sortCmds[i].Result()
 		if err != nil {
-			c.logger.Error("Error fetching sorted members", zap.String("key", key), zap.Error(err))
+			c.log.Error("Error fetching sorted members", zap.String("key", key), zap.Error(err))
 			return nil, fmt.Errorf("error fetching sorted members for key %s: %w", key, err)
 		}
 		sortedIndexMap := make(map[string]int)
@@ -168,7 +168,7 @@ func (c *RedisClient) ZRangeMap(ctx context.Context, keys []string) (map[string]
 
 	_, err := pipe.Exec(ctx)
 	if err != nil {
-		c.logger.Error("Error executing pipeline", zap.Error(err))
+		c.log.Error("Error executing pipeline", zap.Error(err))
 		return nil, fmt.Errorf("error executing pipeline: %w", err)
 	}
 
@@ -177,7 +177,7 @@ func (c *RedisClient) ZRangeMap(ctx context.Context, keys []string) (map[string]
 	for i, key := range keys {
 		members, err := sortCmds[i].Result()
 		if err != nil {
-			c.logger.Error("Error fetching sorted members", zap.String("key", key), zap.Error(err))
+			c.log.Error("Error fetching sorted members", zap.String("key", key), zap.Error(err))
 			return nil, fmt.Errorf("error fetching sorted members for key %s: %w", key, err)
 		}
 

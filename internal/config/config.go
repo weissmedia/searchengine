@@ -12,19 +12,20 @@ import (
 // Config holds all configuration settings for the SearchEngine, including Redis settings,
 // schema paths, and prefix values, with support for environment variables.
 type Config struct {
-	RedisHost        string              `env:"REDIS_HOST" envDefault:"localhost"`          // Hostname of the Redis server
-	RedisPort        int                 `env:"REDIS_PORT" envDefault:"6379"`               // Port number of the Redis server
-	RedisDB          int                 `env:"REDIS_DB" envDefault:"0"`                    // Redis database index to use
-	RedisPassword    string              `env:"REDIS_PASSWORD" envDefault:""`               // Password for Redis authentication (if needed)
-	UseSSL           bool                `env:"REDIS_USE_SSL" envDefault:"false"`           // Whether to use SSL/TLS for Redis connections
-	SearchIndexName  string              `env:"SEARCH_INDEX_NAME" envDefault:"idx"`         // RedisSearch index name
-	SearchSchema     []core.SearchSchema `env:"-"`                                          // Schema defining the fields and their types
-	SearchSchemaFile string              `env:"SEARCH_SCHEMA_FILE,required"`                // File path for the search schema
-	NamespacePrefix  string              `env:"NAMESPACE_PREFIX" envDefault:"searchengine"` // Namespace prefix for organizing data
-	DataPrefix       string              `env:"REDIS_DATA_PREFIX" envDefault:"data"`        // Prefix for data JSON storage
-	FilterPrefix     string              `env:"REDIS_FILTER_PREFIX" envDefault:"filter"`    // Prefix for filter SET lists
-	SortingPrefix    string              `env:"REDIS_SORTING_PREFIX" envDefault:"sorting"`  // Prefix for sorting ZSET lists
-	LogLevel         string              `env:"SEARCHENGINE_LOG_LEVEL" envDefault:"info"`   // Log level for the logger
+	RedisHost        string              `env:"SEARCHENGINE_REDIS_HOST" envDefault:"localhost"`          // Hostname of the Redis server
+	RedisPort        int                 `env:"SEARCHENGINE_REDIS_PORT" envDefault:"6379"`               // Port number of the Redis server
+	RedisDB          int                 `env:"SEARCHENGINE_REDIS_DB" envDefault:"0"`                    // Redis database index to use
+	RedisPassword    string              `env:"SEARCHENGINE_REDIS_PASSWORD" envDefault:""`               // Password for Redis authentication (if needed)
+	UseSSL           bool                `env:"SEARCHENGINE_REDIS_USE_SSL" envDefault:"false"`           // Whether to use SSL/TLS for Redis connections
+	DataPrefix       string              `env:"SEARCHENGINE_REDIS_DATA_PREFIX" envDefault:"data"`        // Prefix for data JSON storage
+	FilterPrefix     string              `env:"SEARCHENGINE_REDIS_FILTER_PREFIX" envDefault:"filter"`    // Prefix for filter SET lists
+	SortingPrefix    string              `env:"SEARCHENGINE_REDIS_SORTING_PREFIX" envDefault:"sorting"`  // Prefix for sorting ZSET lists
+	SearchSchema     []core.SearchSchema `env:"-"`                                                       // Schema defining the fields and their types
+	SearchIndexName  string              `env:"SEARCHENGINE_SEARCH_INDEX_NAME" envDefault:"idx"`         // RedisSearch index name
+	SearchSchemaFile string              `env:"SEARCHENGINE_SEARCH_SCHEMA_FILE,required"`                // File path for the search schema
+	NamespacePrefix  string              `env:"SEARCHENGINE_NAMESPACE_PREFIX" envDefault:"searchengine"` // Namespace prefix for organizing data
+	LogLevel         string              `env:"SEARCHENGINE_LOG_LEVEL" envDefault:"info"`                // Log level for the logger
+	ProfilerEnabled  bool                `env:"SEARCHENGINE_PROFILER_ENABLED" envDefault:"false"`
 }
 
 // NewConfig creates a new Config instance by loading environment variables and reading the search schema from a file.
@@ -123,6 +124,11 @@ func (c *Config) GetFilterPrefix() string {
 // GetSortingPrefix returns the full sorting prefix, combining the namespace and the sorting prefix.
 func (c *Config) GetSortingPrefix() string {
 	return formatPrefix(c.NamespacePrefix, c.SortingPrefix)
+}
+
+// GetProfilerEnabled indicates if the profiler is active.
+func (c *Config) GetProfilerEnabled() bool {
+	return c.ProfilerEnabled
 }
 
 // formatPrefix ensures that prefixes are combined without extra colons
